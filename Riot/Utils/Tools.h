@@ -1,22 +1,13 @@
 /*
- Copyright 2016 OpenMarket Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2016 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import <Foundation/Foundation.h>
-
-#import "MatrixKit/MatrixKit.h"
+#import <MatrixSDK/MatrixSDK.h>
 
 @interface Tools : NSObject
 
@@ -49,15 +40,11 @@
  */
 + (NSURL*)fixURLWithSeveralHashKeys:(NSURL*)url;
 
-#pragma mark - String utilities
+#pragma mark - Time utilities
 
 /**
- Change the alpha value of all text colors of an attibuted string.
-
- @param alpha the alpha value to apply.
- @param attributedString the attributed string to update.
- @return a new attributed string.
+ * Convert a number of days to a duration in ms.
  */
-+ (NSAttributedString *)setTextColorAlpha:(CGFloat)alpha inAttributedString:(NSAttributedString*)attributedString;
++ (uint64_t)durationInMsFromDays:(uint)days;
 
 @end

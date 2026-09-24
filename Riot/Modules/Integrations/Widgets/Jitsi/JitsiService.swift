@@ -1,17 +1,8 @@
 /*
- Copyright 2019 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2019-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -19,11 +10,15 @@ import Foundation
 #if canImport(JitsiMeetSDK)
 import JitsiMeetSDK
 
-enum JitsiServiceError: Error {
+enum JitsiServiceError: LocalizedError {
     case widgetContentCreationFailed
     case emptyResponse
     case noWellKnown
     case unknown
+    
+    var errorDescription: String? {
+        return VectorL10n.callJitsiUnableToStart
+    }
 }
 
 private enum HTTPStatusCodes {
@@ -143,31 +138,30 @@ final class JitsiService: NSObject {
         }
         
         return self.getWellKnown(for: jitsiServerURL) { (result) in
-            var continueOperation: Bool = false
-            var authType: JitsiAuthenticationType?
-            
+            func continueOperation(authType: JitsiAuthenticationType?) {
+                guard let widgetContent = self.createJitsiWidgetContent(serverDomain: serverDomain,
+                                                                        authenticationType: authType,
+                                                                        roomID: roomID,
+                                                                        isAudioOnly: isAudioOnly)
+                else {
+                    failure(JitsiServiceError.widgetContentCreationFailed)
+                    return
+                }
+                
+                success(widgetContent)
+            }
+                        
             switch result {
             case .success(let jitsiWellKnown):
-                authType = jitsiWellKnown.authenticationType
-                continueOperation = true
+                continueOperation(authType: jitsiWellKnown.authenticationType)
             case .failure(let error):
                 MXLog.debug("[JitsiService] Fail to get Jitsi Well Known with error: \(error)")
                 if let error = error as? JitsiServiceError, error == .noWellKnown {
                     //  no well-known, continue with no auth
-                    continueOperation = true
+                    continueOperation(authType: nil)
                 } else {
                     failure(error)
                 }
-            }
-            
-            if continueOperation,
-               let widgetContent = self.createJitsiWidgetContent(serverDomain: serverDomain,
-                                                                 authenticationType: authType,
-                                                                 roomID: roomID,
-                                                                 isAudioOnly: isAudioOnly) {
-                success(widgetContent)
-            } else {
-                failure(JitsiServiceError.widgetContentCreationFailed)
             }
         }
     }

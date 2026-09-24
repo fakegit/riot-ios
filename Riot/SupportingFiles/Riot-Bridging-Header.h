@@ -3,7 +3,6 @@
 //
 
 @import MatrixSDK;
-@import MatrixKit;
 @import DTCoreText;
 
 #import "WebViewViewController.h"
@@ -19,7 +18,8 @@
 #import "RoomBubbleCellData.h"
 #import "MXKRoomBubbleTableViewCell+Riot.h"
 #import "UserEncryptionTrustLevel.h"
-#import "BubbleReactionsViewSizer.h"
+#import "RoomEncryptionTrustLevel.h"
+#import "RoomReactionsViewSizer.h"
 #import "RoomEncryptedDataBubbleCell.h"
 #import "LegacyAppDelegate.h"
 #import "DirectoryServerPickerViewController.h"
@@ -40,3 +40,36 @@
 #import "BuildInfo.h"
 #import "RoomMemberDetailsViewController.h"
 #import "Tools.h"
+#import "RoomViewController.h"
+#import "ContactDetailsViewController.h"
+#import "RoomInputToolbarView.h"
+#import "NSArray+Element.h"
+#import "ShareItemSenderProtocol.h"
+#import "Contact.h"
+#import "RoomTimelineCellProvider.h"
+#import "PlainRoomTimelineCellProvider.h"
+#import "BubbleRoomTimelineCellProvider.h"
+#import "RoomSelectedStickerBubbleCell.h"
+#import "MXRoom+Riot.h"
+#import "UniversalLink.h"
+#import "VoiceBroadcastInfo.h"
+
+// MatrixKit common imports, shared with all targets
+#import "MatrixKit-Bridging-Header.h"
+
+// MatrixKit imports for the application target (Riot)
+#import "MXKBarButtonItem.h"
+#import "MXKPieChartView.h"
+#import "MXKErrorAlertPresentation.h"
+#import "MXKErrorPresentation.h"
+#import "MXKErrorViewModel.h"
+#import "MXKEncryptionKeysExportView.h"
+#import "MXKTableViewCellWithLabelAndSwitch.h"
+#import "MXKTableViewCellWithTextView.h"
+#import "MXKTableViewCellWithButton.h"
+#import "MXKRoomDataSourceManager.h"
+#import "MXRoom+Sync.h"
+#import "UIAlertController+MatrixKit.h"
+#import "MXKMessageTextView.h"
+#import "AllChatsLayoutModels.h"
+#import "SecurityViewController.h"

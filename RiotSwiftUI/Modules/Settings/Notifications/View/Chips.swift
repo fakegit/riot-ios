@@ -1,26 +1,15 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import SwiftUI
 
 /// Renders multiple chips in a flow layout.
-@available(iOS 14.0, *)
 struct Chips: View {
-    
-    @State private var frame: CGRect = CGRect.zero
+    @State private var frame = CGRect.zero
     
     let titles: [String]
     let didDeleteChip: (String) -> Void
@@ -57,7 +46,7 @@ struct Chips: View {
                                 }
                                 return result
                             }
-                            .alignmentGuide(.top) { dimension in
+                            .alignmentGuide(.top) { _ in
                                 // Use next y value and reset if its the last.
                                 let result = y
                                 if chip == titles.last {
@@ -75,7 +64,6 @@ struct Chips: View {
     }
 }
 
-@available(iOS 14.0, *)
 struct Chips_Previews: PreviewProvider {
     static var chips: [String] = ["Chip1", "Chip2", "Chip3", "Chip4", "Chip5", "Chip6"]
     static var previews: some View {
@@ -84,6 +72,5 @@ struct Chips_Previews: PreviewProvider {
             Chips(titles: chips, didDeleteChip: { _ in })
                 .theme(.dark)
         }
-        
     }
 }

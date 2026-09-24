@@ -1,17 +1,8 @@
 //
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -20,13 +11,14 @@ import DSWaveformImage
 
 @objc public protocol VoiceMessageControllerDelegate: AnyObject {
     func voiceMessageControllerDidRequestMicrophonePermission(_ voiceMessageController: VoiceMessageController)
+    func voiceMessageControllerDidRequestRecording(_ voiceMessageController: VoiceMessageController) -> Bool
     func voiceMessageController(_ voiceMessageController: VoiceMessageController, didRequestSendForFileAtURL url: URL, duration: UInt, samples: [Float]?, completion: @escaping (Bool) -> Void)
 }
 
 public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, VoiceMessageAudioRecorderDelegate, VoiceMessageAudioPlayerDelegate {
     
     private enum Constants {
-        static let maximumAudioRecordingDuration: TimeInterval = 120.0
+        static let maximumAudioRecordingDuration: TimeInterval = 300.0
         static let maximumAudioRecordingLengthReachedThreshold: TimeInterval = 10.0
         static let elapsedTimeFormat = "m:ss"
         static let fileNameDateFormat = "MM.dd.yyyy HH.mm.ss"
@@ -106,6 +98,13 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
         guard let temporaryFileURL = temporaryFileURL else {
              return
         }
+        
+        // Ask our delegate if we can start recording
+        let canStartRecording = delegate?.voiceMessageControllerDidRequestRecording(self) ?? true
+        guard canStartRecording else {
+            return
+        }
+        
         guard AVAudioSession.sharedInstance().recordPermission == .granted else {
             delegate?.voiceMessageControllerDidRequestMicrophonePermission(self)
             return
@@ -130,12 +129,7 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
     }
     
     func voiceMessageToolbarViewDidRequestRecordingCancel(_ toolbarView: VoiceMessageToolbarView) {
-        isInLockedMode = false
-        audioPlayer?.stop()
-        audioRecorder?.stopRecording()
-        deleteRecordingAtURL(temporaryFileURL)
-        UINotificationFeedbackGenerator().notificationOccurred(.error)
-        updateUI()
+        cancelRecording()
     }
     
     func voiceMessageToolbarViewDidRequestLockedModeRecording(_ toolbarView: VoiceMessageToolbarView) {
@@ -184,7 +178,10 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
         audioPlayer?.stop()
         audioRecorder?.stopRecording()
         
-        sendRecordingAtURL(temporaryFileURL)
+        // As we only use a single temporary file, we have to rename it, otherwise it will be deleted once the file is sent and if another recording has been started meanwhile, it will fail.
+        if let finalFileURL = finalizeRecordingAtURL(temporaryFileURL) {
+            sendRecordingAtURL(finalFileURL)
+        }
         
         isInLockedMode = false
         updateUI()
@@ -193,15 +190,25 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
     // MARK: - AudioRecorderDelegate
     
     func audioRecorderDidStartRecording(_ audioRecorder: VoiceMessageAudioRecorder) {
+        guard self.audioRecorder === audioRecorder else {
+            return
+        }
         notifiedRemainingTime = false
         updateUI()
     }
     
     func audioRecorderDidFinishRecording(_ audioRecorder: VoiceMessageAudioRecorder) {
+        guard self.audioRecorder === audioRecorder else {
+            return
+        }
         updateUI()
     }
     
     func audioRecorder(_ audioRecorder: VoiceMessageAudioRecorder, didFailWithError: Error) {
+        guard self.audioRecorder === audioRecorder else {
+            MXLog.error("[VoiceMessageController] audioRecorder failed but it's not the current one.")
+            return
+        }
         isInLockedMode = false
         updateUI()
         
@@ -211,20 +218,34 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
     // MARK: - VoiceMessageAudioPlayerDelegate
     
     func audioPlayerDidStartPlaying(_ audioPlayer: VoiceMessageAudioPlayer) {
+        guard self.audioPlayer === audioPlayer else {
+            return
+        }
         updateUI()
     }
     
     func audioPlayerDidPausePlaying(_ audioPlayer: VoiceMessageAudioPlayer) {
+        guard self.audioPlayer === audioPlayer else {
+            return
+        }
         updateUI()
     }
     
     func audioPlayerDidStopPlaying(_ audioPlayer: VoiceMessageAudioPlayer) {
+        guard self.audioPlayer === audioPlayer else {
+            return
+        }
         updateUI()
     }
     
     func audioPlayerDidFinishPlaying(_ audioPlayer: VoiceMessageAudioPlayer) {
+        guard self.audioPlayer === audioPlayer else {
+            return
+        }
         audioPlayer.seekToTime(0.0) { [weak self] _ in
             self?.updateUI()
+            // Reload its content if necessary, otherwise the seek won't work
+            self?.audioPlayer?.reloadContentIfNeeded()
         }
     }
     
@@ -257,13 +278,34 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
         audioRecorder?.stopRecording()
 
         guard isInLockedMode else {
-            if recordDuration ?? 0 >= Constants.minimumRecordingDuration {
-                sendRecordingAtURL(temporaryFileURL)
+            if recordDuration ?? 0 >= Constants.minimumRecordingDuration, let finalRecordingURL = finalizeRecordingAtURL(temporaryFileURL) {
+                sendRecordingAtURL(finalRecordingURL)
+            } else {
+                cancelRecording()
             }
             return
         }
         
         loadDraftRecording()
+        
+        updateUI()
+    }
+    
+    private func cancelRecording() {
+        isInLockedMode = false
+        
+        audioPlayer?.stop()
+        
+        // Check if we are recording before stopping the recording, because it will try to pause the audio session and it can be problematic if another player or recorder is running
+        if let audioRecorder, audioRecorder.isRecording {
+            audioRecorder.stopRecording()
+        }
+        // Also, we can release it now, which will prevent the service provider from trying to manage an old audio recorder.
+        audioRecorder = nil
+        
+        deleteRecordingAtURL(temporaryFileURL)
+        
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
         
         updateUI()
     }
@@ -298,7 +340,7 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
                     MXLog.error("[VoiceMessageController] Failed retrieving media duration")
                 }
             case .failure(let error):
-                MXLog.error("[VoiceMessageController] Failed getting audio duration with: \(error)")
+                MXLog.error("[VoiceMessageController] Failed getting audio duration", context: error)
             }
             
             dispatchGroup.leave()
@@ -326,7 +368,7 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
             case .success:
                 finalURL = destinationURL
             case .failure(let error):
-                MXLog.error("Failed failed encoding audio message with: \(error)")
+                MXLog.error("Failed failed encoding audio message", context: error)
             }
             
             dispatchGroup.leave()
@@ -342,20 +384,44 @@ public class VoiceMessageController: NSObject, VoiceMessageToolbarViewDelegate, 
                                                   samples: invertedSamples) { [weak self] success in
                 UINotificationFeedbackGenerator().notificationOccurred((success ? .success : .error))
                 self?.deleteRecordingAtURL(sourceURL)
-                self?.deleteRecordingAtURL(destinationURL)
+                
+                // Do not delete the file to be sent if request failed, the retry flow will need it
+                // There's no manual mechanism to clean it up afterwards but the tmp folder
+                // they live in will eventually be deleted by the system
+                if success {
+                    self?.deleteRecordingAtURL(destinationURL)
+                }
             }
         }
     }
     
+    private func finalizeRecordingAtURL(_ url: URL?) -> URL? {
+        guard let url = url, FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        // We rename the file to something unique, so that we can start a new recording without having to wait for this record to be sent.
+        let newPath = url.deletingPathExtension().path + "-\(UUID().uuidString)"
+        let destinationUrl = URL(fileURLWithPath: newPath).appendingPathExtension(url.pathExtension)
+        do {
+            try FileManager.default.moveItem(at: url, to: destinationUrl)
+        } catch {
+            MXLog.error("[VoiceMessageController] finalizeRecordingAtURL:", context: error)
+            return nil
+        }
+        return destinationUrl
+    }
+    
     private func deleteRecordingAtURL(_ url: URL?) {
-        guard let url = url else {
+        // Fix: use url.path instead of url.absoluteString when using FileManager otherwise the url seems to be percent encoded and the file is not found.
+        guard let url = url, FileManager.default.fileExists(atPath: url.path) else {
             return
         }
         
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
-            MXLog.error(error)
+            MXLog.error("[VoiceMessageController] deleteRecordingAtURL:", context: error)
         }
     }
     

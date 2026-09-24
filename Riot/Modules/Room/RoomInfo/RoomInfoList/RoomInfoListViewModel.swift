@@ -26,6 +26,7 @@ final class RoomInfoListViewModel: NSObject, RoomInfoListViewModelType {
 
     private let session: MXSession
     private let room: MXRoom
+    private var isLastOwner = false
     
     // MARK: Public
 
@@ -34,19 +35,25 @@ final class RoomInfoListViewModel: NSObject, RoomInfoListViewModelType {
     
     private var viewData: RoomInfoListViewData {
         let encryptionImage = EncryptionTrustLevelBadgeImageHelper.roomBadgeImage(for: room.summary.roomEncryptionTrustLevel())
+        let directUserPresence = session.user(withUserId: room.directUserId)?.presence ?? .unknown
         
         let basicInfoViewData = RoomInfoBasicViewData(avatarUrl: room.summary.avatar,
                                                       mediaManager: session.mediaManager,
                                                       roomId: room.roomId,
-                                                      roomDisplayName: room.summary.displayname,
+                                                      roomDisplayName: room.summary.displayName,
                                                       mainRoomAlias: room.summary.aliases?.first,
                                                       roomTopic: room.summary.topic,
                                                       encryptionImage: encryptionImage,
                                                       isEncrypted: room.summary.isEncrypted,
-                                                      isDirect: room.isDirect)
+                                                      isDirect: room.isDirect,
+                                                      directUserId: room.directUserId,
+                                                      directUserPresence: directUserPresence)
         
         return RoomInfoListViewData(numberOfMembers: Int(room.summary.membersCount.joined),
-                                    basicInfoViewData: basicInfoViewData)
+                                    isEncrypted: room.summary.isEncrypted,
+                                    isDirect: room.isDirect,
+                                    basicInfoViewData: basicInfoViewData,
+                                    isLastOwner: isLastOwner)
     }
     
     // MARK: - Setup
@@ -74,6 +81,8 @@ final class RoomInfoListViewModel: NSObject, RoomInfoListViewModelType {
             self.leave()
         case .cancel:
             self.coordinatorDelegate?.roomInfoListViewModelDidCancel(self)
+        case .report:
+            self.coordinatorDelegate?.roomInfoListViewModelDidRequestReportRoom(self)
         }
     }
     
@@ -90,6 +99,9 @@ final class RoomInfoListViewModel: NSObject, RoomInfoListViewModelType {
     @objc private func roomSummaryUpdated(_ notification: Notification) {
         //  force update view
         self.update(viewState: .loaded(viewData: viewData))
+        Task {
+            isLastOwner = (try? await room.isLastOwner()) == true
+        }
     }
     
     private func loadData() {

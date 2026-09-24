@@ -1,28 +1,19 @@
 /*
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "IncomingCallView.h"
 
-#import <MatrixKit/MXKImageView.h>
+#import "MatrixKit.h"
 #import <MatrixSDK/MXMediaManager.h>
 
 #import "CircleButton.h"
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 static const CGFloat kAvatarSize = 100.0;
 static const CGFloat kButtonSize = 80.0;
@@ -89,7 +80,7 @@ static const CGFloat kButtonSize = 80.0;
         
         UIColor *answerButtonBorderColor = ThemeService.shared.theme.tintColor;
         
-        self.answerButton = [[CircleButton alloc] initWithImage:[UIImage imageNamed:@"voice_call_hangon_icon"]
+        self.answerButton = [[CircleButton alloc] initWithImage:AssetImages.voiceCallHangonIcon.image
                                                     borderColor:answerButtonBorderColor];
         self.answerButton.defaultBackgroundColor = ThemeService.shared.theme.backgroundColor;
         self.answerButton.tintColor = answerButtonBorderColor;
@@ -103,7 +94,7 @@ static const CGFloat kButtonSize = 80.0;
         
         UIColor *rejectButtonBorderColor = ThemeService.shared.theme.warningColor;
         
-        self.rejectButton = [[CircleButton alloc] initWithImage:[UIImage imageNamed:@"voice_call_hangup_icon"]
+        self.rejectButton = [[CircleButton alloc] initWithImage:AssetImages.voiceCallHangupIcon.image
                                                     borderColor:rejectButtonBorderColor];
         self.rejectButton.defaultBackgroundColor = ThemeService.shared.theme.backgroundColor;
         self.rejectButton.tintColor = rejectButtonBorderColor;

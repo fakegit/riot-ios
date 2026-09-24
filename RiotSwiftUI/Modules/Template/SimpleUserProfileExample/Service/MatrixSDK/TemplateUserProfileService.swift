@@ -1,33 +1,16 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import Foundation
 import Combine
+import Foundation
 
-@available(iOS 14.0, *)
 class TemplateUserProfileService: TemplateUserProfileServiceProtocol {
-    
-    // MARK: - Properties
-    
-    // MARK: Private
-    
     private let session: MXSession
     private var listenerReference: Any?
-    
-    // MARK: Public
     
     var userId: String {
         session.myUser.userId
@@ -43,12 +26,10 @@ class TemplateUserProfileService: TemplateUserProfileServiceProtocol {
     
     private(set) var presenceSubject: CurrentValueSubject<TemplateUserProfilePresence, Never>
     
-    // MARK: - Setup
-    
     init(session: MXSession) {
         self.session = session
-        self.presenceSubject = CurrentValueSubject(TemplateUserProfilePresence(mxPresence: session.myUser.presence))
-        self.listenerReference = setupPresenceListener()
+        presenceSubject = CurrentValueSubject(TemplateUserProfilePresence(mxPresence: session.myUser.presence))
+        listenerReference = setupPresenceListener()
     }
 
     deinit {
@@ -71,15 +52,14 @@ class TemplateUserProfileService: TemplateUserProfileServiceProtocol {
     }
 }
 
-fileprivate extension TemplateUserProfilePresence {
-    
+private extension TemplateUserProfilePresence {
     init(mxPresence: MXPresence) {
         switch mxPresence {
-        case MXPresenceOnline:
+        case .online:
             self = .online
-        case MXPresenceUnavailable:
+        case .unavailable:
             self = .idle
-        case MXPresenceOffline, MXPresenceUnknown:
+        case .offline, .unknown:
             self = .offline
         default:
             self = .offline

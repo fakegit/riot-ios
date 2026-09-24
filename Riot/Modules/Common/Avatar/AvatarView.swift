@@ -1,17 +1,8 @@
 //
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import UIKit
@@ -103,22 +94,17 @@ class AvatarView: UIView, Themable {
     
     func updateAvatarImageView(with viewData: AvatarViewDataProtocol) {
         guard let avatarImageView = self.avatarImageView else {
+            MXLog.warning("[AvatarView] avatar not updated because avatarImageView is nil.")
             return
         }
         
-        let defaultAvatarImage: UIImage?
-        var defaultAvatarImageContentMode: UIView.ContentMode = .scaleAspectFill
+        let (defaultAvatarImage, defaultAvatarImageContentMode) = viewData.fallbackImageParameters() ?? (nil, .scaleAspectFill)
+        updateAvatarImageView(image: defaultAvatarImage, contentMode: defaultAvatarImageContentMode)
         
-        switch viewData.fallbackImage {
-        case .matrixItem(let matrixItemId, let matrixItemDisplayName):
-            defaultAvatarImage = AvatarGenerator.generateAvatar(forMatrixItem: matrixItemId, withDisplayName: matrixItemDisplayName)
-        case .image(let image, let contentMode):
-            defaultAvatarImage = image
-            defaultAvatarImageContentMode = contentMode ?? .scaleAspectFill
-        case .none:
-            defaultAvatarImage = nil
+        if defaultAvatarImage == nil {
+            MXLog.warning("[AvatarView] defaultAvatarImage is nil")
         }
-                
+
         if let avatarUrl = viewData.avatarUrl {
             avatarImageView.setImageURI(avatarUrl,
                                         withType: nil,
@@ -127,10 +113,13 @@ class AvatarView: UIView, Themable {
                                         with: MXThumbnailingMethodScale,
                                         previewImage: defaultAvatarImage,
                                         mediaManager: viewData.mediaManager)
-            avatarImageView.contentMode = .scaleAspectFill
+            updateAvatarContentMode(contentMode: .scaleAspectFill)
+            
+            if avatarImageView.frame.size.width < 8 || avatarImageView.frame.size.height < 8 {
+                MXLog.warning("[AvatarView] small avatarImageView frame: \(avatarImageView.frame)")
+            }
         } else {
-            avatarImageView.image = defaultAvatarImage
-            avatarImageView.contentMode = defaultAvatarImageContentMode
+            updateAvatarImageView(image: defaultAvatarImage, contentMode: defaultAvatarImageContentMode)
         }
     }
     
@@ -145,6 +134,16 @@ class AvatarView: UIView, Themable {
         let gestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(buttonAction(_:)))
         gestureRecognizer.minimumPressDuration = 0
         self.addGestureRecognizer(gestureRecognizer)
+    }
+    
+    private func updateAvatarImageView(image: UIImage?, contentMode: UIView.ContentMode) {
+        avatarImageView?.image = image
+        updateAvatarContentMode(contentMode: contentMode)
+    }
+    
+    private func updateAvatarContentMode(contentMode: UIView.ContentMode) {
+        avatarImageView?.contentMode = contentMode
+        avatarImageView?.imageView?.contentMode = contentMode
     }
         
     // MARK: - Actions

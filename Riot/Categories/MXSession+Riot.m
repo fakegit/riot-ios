@@ -1,23 +1,15 @@
 /*
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "MXSession+Riot.h"
 
 #import "MXRoom+Riot.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 @implementation MXSession (Riot)
 
@@ -26,15 +18,15 @@
     NSUInteger missedDiscussionsCount = 0;
     
     // Sum all the rooms with missed notifications.
-    for (MXRoomSummary *roomSummary in self.roomsSummaries)
+    for (MXRoom *room in self.rooms)
     {
-        NSUInteger notificationCount = roomSummary.notificationCount;
+        NSUInteger notificationCount = room.summary.notificationCount;
         
         // Ignore the regular notification count if the room is in 'mentions only" mode at the Riot level.
-        if (roomSummary.room.isMentionsOnly)
+        if (room.isMentionsOnly)
         {
             // Only the highlighted missed messages must be considered here.
-            notificationCount = roomSummary.highlightCount;
+            notificationCount = room.summary.highlightCount;
         }
         
         if (notificationCount)
@@ -59,12 +51,13 @@
                                                          success:(void (^)(BOOL canEnableE2E))success
                                                          failure:(void (^)(NSError *error))failure;
 {
-    if ([self vc_homeserverConfiguration].isE2EEByDefaultEnabled)
+    if ([self vc_homeserverConfiguration].encryption.isE2EEByDefaultEnabled)
     {
         return [self canEnableE2EByDefaultInNewRoomWithUsers:userIds success:success failure:failure];
     }
     else
     {
+        MXLogWarning(@"[MXSession] E2EE is disabled by default on this homeserver.\nWellknown content: %@", self.homeserverWellknown.JSONDictionary);
         success(NO);
         return [MXHTTPOperation new];
     }

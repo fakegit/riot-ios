@@ -17,11 +17,15 @@
  */
 
 import Foundation
+import MatrixSDK
 
 @objc protocol RoomInfoCoordinatorBridgePresenterDelegate {
     func roomInfoCoordinatorBridgePresenterDelegateDidComplete(_ coordinatorBridgePresenter: RoomInfoCoordinatorBridgePresenter)
     func roomInfoCoordinatorBridgePresenter(_ coordinatorBridgePresenter: RoomInfoCoordinatorBridgePresenter, didRequestMentionForMember member: MXRoomMember)
     func roomInfoCoordinatorBridgePresenterDelegateDidLeaveRoom(_ coordinatorBridgePresenter: RoomInfoCoordinatorBridgePresenter)
+    func roomInfoCoordinatorBridgePresenter(_ coordinatorBridgePresenter: RoomInfoCoordinatorBridgePresenter, didReplaceRoomWithReplacementId roomId: String)
+    func roomInfoCoordinatorBridgePresenter(_ coordinator: RoomInfoCoordinatorBridgePresenter, viewEventInTimeline event: MXEvent)
+    func roomInfoCoordinatorBridgePresenterDidRequestReportRoom(_ coordinatorBridgePresenter: RoomInfoCoordinatorBridgePresenter)
 }
 
 /// RoomInfoCoordinatorBridgePresenter enables to start RoomInfoCoordinator from a view controller.
@@ -73,7 +77,7 @@ final class RoomInfoCoordinatorBridgePresenter: NSObject {
     }
     
     func push(from navigationController: UINavigationController, animated: Bool) {
-        let navigationRouter = NavigationRouter(navigationController: navigationController)
+        let navigationRouter = NavigationRouterStore.shared.navigationRouter(for: navigationController)
         
         let roomInfoCoordinator = RoomInfoCoordinator(parameters: self.coordinatorParameters, navigationRouter: navigationRouter)
         roomInfoCoordinator.delegate = self
@@ -123,6 +127,18 @@ extension RoomInfoCoordinatorBridgePresenter: RoomInfoCoordinatorDelegate {
     
     func roomInfoCoordinatorDidLeaveRoom(_ coordinator: RoomInfoCoordinatorType) {
         self.delegate?.roomInfoCoordinatorBridgePresenterDelegateDidLeaveRoom(self)
+    }
+    
+    func roomInfoCoordinator(_ coordinator: RoomInfoCoordinatorType, didReplaceRoomWithReplacementId roomId: String) {
+        self.delegate?.roomInfoCoordinatorBridgePresenter(self, didReplaceRoomWithReplacementId: roomId)
+    }
+    
+    func roomInfoCoordinator(_ coordinator: RoomInfoCoordinatorType, viewEventInTimeline event: MXEvent) {
+        self.delegate?.roomInfoCoordinatorBridgePresenter(self, viewEventInTimeline: event)
+    }
+    
+    func roomInfoCoordinatorDidRequestReportRoom(_ coordinator: RoomInfoCoordinatorType) {
+        self.delegate?.roomInfoCoordinatorBridgePresenterDidRequestReportRoom(self)
     }
 }
 

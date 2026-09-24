@@ -1,23 +1,13 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import XCTest
 import Combine
+import XCTest
 
-@available(iOS 14.0, *)
 extension XCTestCase {
     /// XCTest utility to wait for results from publishers, so that the output can be used for assertions.
     ///
@@ -30,11 +20,9 @@ extension XCTestCase {
     ///   - timeout: A timeout after which we give up.
     /// - Throws: If it can't get the unwrapped result.
     /// - Returns: The unwrapped result.
-    func xcAwait<T: Publisher>(
-        _ publisher: T,
-        timeout: TimeInterval = 10
-    ) throws -> T.Output {
-        return try xcAwaitDeferred(publisher, timeout: timeout)()
+    func xcAwait<T: Publisher>(_ publisher: T,
+                               timeout: TimeInterval = 10) throws -> T.Output {
+        try xcAwaitDeferred(publisher, timeout: timeout)()
     }
     
     /// XCTest utility that allows for a deferred wait of results from publishers, so that the output can be used for assertions.
@@ -49,12 +37,10 @@ extension XCTestCase {
     ///   - publisher: The publisher to wait on.
     ///   - timeout: A timeout after which we give up.
     /// - Returns: A closure that starts the waiting of results when called. The closure will return the unwrapped result.
-    func xcAwaitDeferred<T: Publisher>(
-        _ publisher: T,
-        timeout: TimeInterval = 10
-    ) -> (() throws -> (T.Output)) {
+    func xcAwaitDeferred<T: Publisher>(_ publisher: T,
+                                       timeout: TimeInterval = 10) -> (() throws -> (T.Output)) {
         var result: Result<T.Output, Error>?
-        let expectation = self.expectation(description: "Awaiting publisher")
+        let expectation = expectation(description: "Awaiting publisher")
 
         let cancellable = publisher.sink(
             receiveCompletion: { completion in

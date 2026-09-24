@@ -1,24 +1,15 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "ContactDetailsViewController.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 #import "MXSession+Riot.h"
 
 #import "RoomMemberTitleView.h"
@@ -47,12 +38,12 @@
     /**
      Observe UIApplicationWillChangeStatusBarOrientationNotification to hide/show bubbles bg.
      */
-    id UIApplicationWillChangeStatusBarOrientationNotificationObserver;
+    __weak id UIApplicationWillChangeStatusBarOrientationNotificationObserver;
     
     /**
      The observer of the presence for matrix user.
      */
-    id mxPresenceObserver;
+    __weak id mxPresenceObserver;
     
     /**
      List of the basic actions on this contact.
@@ -79,7 +70,7 @@
     /**
      Observe kThemeServiceDidChangeThemeNotification to handle user interface theme change.
      */
-    id kThemeServiceDidChangeThemeNotificationObserver;
+    __weak id kThemeServiceDidChangeThemeNotificationObserver;
     
     /**
      The current visibility of the status bar in this view controller.
@@ -98,7 +89,7 @@
                           bundle:[NSBundle bundleForClass:self.class]];
 }
 
-+ (instancetype)contactDetailsViewController
++ (instancetype)instantiate
 {
     return [[[self class] alloc] initWithNibName:NSStringFromClass(self.class)
                                           bundle:[NSBundle bundleForClass:self.class]];
@@ -142,6 +133,9 @@
     // Define directly the navigation titleView with the custom title view instance. Do not use anymore a container.
     self.navigationItem.titleView = contactTitleView;    
     
+    // Display leftBarButtonItems or leftBarButtonItem to the right of the Back button
+    self.navigationItem.leftItemsSupplementBackButton = YES;
+    
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTapGesture:)];
     [tap setNumberOfTouchesRequired:1];
     [tap setNumberOfTapsRequired:1];
@@ -179,8 +173,12 @@
         self.bottomImageView.hidden = (orientation.integerValue == UIInterfaceOrientationLandscapeLeft || orientation.integerValue == UIInterfaceOrientationLandscapeRight);
     }];
     
+    MXWeakify(self);
+    
     // Observe user interface theme change.
     kThemeServiceDidChangeThemeNotificationObserver = [[NSNotificationCenter defaultCenter] addObserverForName:kThemeServiceDidChangeThemeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notif) {
+        
+        MXStrongifyAndReturnIfNil(self);
         
         [self userInterfaceThemeDidChange];
         
@@ -225,9 +223,6 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"ContactDetails"];
     
     // Hide the bottom border of the navigation bar to display the expander header
     [self hideNavigationBarBorder:YES];
@@ -376,8 +371,12 @@
     // Be warned when the thumbnail is updated
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onThumbnailUpdate:) name:kMXKContactThumbnailUpdateNotification object:nil];
     
+    MXWeakify(self);
+    
     // Observe contact presence change
     mxPresenceObserver = [[NSNotificationCenter defaultCenter] addObserverForName:kMXKContactManagerMatrixUserPresenceChangeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notif) {
+        
+        MXStrongifyAndReturnIfNil(self);
         
         NSString* matrixId = self.firstMatrixId;
         
@@ -725,7 +724,7 @@
         }
         else
         {
-            roomCell.avatarImageView.image = [UIImage imageNamed:@"start_chat"];
+            roomCell.avatarImageView.image = AssetImages.startChat.image;
             roomCell.avatarImageView.defaultBackgroundColor = [UIColor clearColor];
             roomCell.titleLabel.text = [VectorL10n roomParticipantsActionStartNewChat];
         }
@@ -793,6 +792,7 @@
         if (indexPath.row < directChatsArray.count)
         {
             // Open this room
+            Analytics.shared.viewRoomTrigger = AnalyticsViewRoomTriggerSearchContactDetail;
             [[AppDelegate theDelegate] showRoom:directChatsArray[indexPath.row] andEventId:nil withMatrixSession:self.mainSession];
         }
         else
@@ -869,9 +869,9 @@
                 // Prompt user to ignore content from this user
                 __weak __typeof(self) weakSelf = self;
                 [currentAlert dismissViewControllerAnimated:NO completion:nil];
-                currentAlert = [UIAlertController alertControllerWithTitle:[MatrixKitL10n roomMemberIgnorePrompt] message:nil preferredStyle:UIAlertControllerStyleAlert];
+                currentAlert = [UIAlertController alertControllerWithTitle:[VectorL10n roomMemberIgnorePrompt] message:nil preferredStyle:UIAlertControllerStyleAlert];
                 
-                [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n yes]
+                [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n yes]
                                                                  style:UIAlertActionStyleDefault
                                                                handler:^(UIAlertAction * action) {
                                                                    
@@ -900,7 +900,7 @@
                                                                    
                                                                }]];
                 
-                [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n no]
+                [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n no]
                                                                  style:UIAlertActionStyleDefault
                                                                handler:^(UIAlertAction * action) {
                                                                    
@@ -945,7 +945,7 @@
                 
                 if (_contact.matrixIdentifiers.count)
                 {
-                    [[AppDelegate theDelegate] createDirectChatWithUserId:self.firstMatrixId completion:^{
+                    [[AppDelegate theDelegate] showNewDirectChat:self.firstMatrixId withMatrixSession:self.mainSession completion:^{
                         
                         [self removePendingActionMask];
                     }];
@@ -978,10 +978,10 @@
                         {
                             [self removePendingActionMask];
                             
-                            UIAlertController *alert = [UIAlertController alertControllerWithTitle:[MatrixKitL10n error]
+                            UIAlertController *alert = [UIAlertController alertControllerWithTitle:[VectorL10n error]
                                                                                            message:[VectorL10n roomParticipantsStartNewChatErrorUsingUserEmailWithoutIdentityServer]
                                                                                     preferredStyle:UIAlertControllerStyleAlert];
-                            [alert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok] style:UIAlertActionStyleDefault handler:nil]];
+                            [alert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok] style:UIAlertActionStyleDefault handler:nil]];
                             [self presentViewController:alert animated:YES completion:nil];
                             
                             return;
@@ -1045,7 +1045,8 @@
                             self->roomCreationRequest = nil;
 
                             [self removePendingActionMask];
-
+                            
+                            Analytics.shared.viewRoomTrigger = AnalyticsViewRoomTriggerCreated;
                             [[AppDelegate theDelegate] showRoom:room.roomId andEventId:nil withMatrixSession:self.mainSession];
 
                         } failure:onFailure];
@@ -1076,7 +1077,7 @@
                     MXRoomCreationParameters *roomCreationParameters = [MXRoomCreationParameters parametersForDirectRoomWithUser:matrixId];
                     roomCreationRequest = [self.mainSession createRoomWithParameters:roomCreationParameters success:^(MXRoom *room) {
 
-                        roomCreationRequest = nil;
+                        self->roomCreationRequest = nil;
 
                         // Delay the call in order to be sure that the room is ready
                         dispatch_async(dispatch_get_main_queue(), ^{
@@ -1088,7 +1089,7 @@
 
                         MXLogDebug(@"[ContactDetailsViewController] Create room failed");
 
-                        roomCreationRequest = nil;
+                        self->roomCreationRequest = nil;
 
                         [self removePendingActionMask];
 
@@ -1132,7 +1133,7 @@
         avatarFullScreenView.stretchable = YES;
 
         MXWeakify(self);
-        [avatarFullScreenView setRightButtonTitle:[MatrixKitL10n ok] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
+        [avatarFullScreenView setRightButtonTitle:[VectorL10n ok] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
             
             MXStrongifyAndReturnIfNil(self);
             [avatarFullScreenView dismissSelection];

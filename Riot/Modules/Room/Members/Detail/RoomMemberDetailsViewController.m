@@ -1,24 +1,15 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomMemberDetailsViewController.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import "RoomMemberTitleView.h"
 
@@ -32,7 +23,7 @@
 #define TABLEVIEW_ROW_CELL_HEIGHT         46
 #define TABLEVIEW_SECTION_HEADER_HEIGHT   28
 
-@interface RoomMemberDetailsViewController () <UIGestureRecognizerDelegate, DeviceTableViewCellDelegate, RoomMemberTitleViewDelegate, KeyVerificationCoordinatorBridgePresenterDelegate>
+@interface RoomMemberDetailsViewController () <UIGestureRecognizerDelegate, DeviceTableViewCellDelegate, RoomMemberTitleViewDelegate, KeyVerificationCoordinatorBridgePresenterDelegate, UserVerificationCoordinatorBridgePresenterDelegate>
 {
     RoomMemberTitleView* memberTitleView;
     
@@ -89,7 +80,9 @@
 @property (weak, nonatomic) IBOutlet UIImageView *roomMemberAvatarBadgeImageView;
 
 @property (weak, nonatomic) IBOutlet UILabel *roomMemberNameLabel;
-@property (weak, nonatomic) IBOutlet UIView *roomMemberNameLabelMask;
+@property (weak, nonatomic) IBOutlet UIView *roomMemberNameContainerView;
+
+@property (weak, nonatomic) IBOutlet UILabel *roomMemberUserIdLabel;
 
 @property (weak, nonatomic) IBOutlet UILabel *roomMemberStatusLabel;
 
@@ -101,6 +94,8 @@
 @property(nonatomic) UserEncryptionTrustLevel encryptionTrustLevel;
 
 @property(nonatomic, strong) UserVerificationCoordinatorBridgePresenter *userVerificationCoordinatorBridgePresenter;
+
+@property(nonatomic) AnalyticsScreenTracker *screenTracker;
 
 @end
 
@@ -137,6 +132,8 @@
     
     // Keep visible the status bar by default.
     isStatusBarHidden = NO;
+    
+    self.screenTracker = [[AnalyticsScreenTracker alloc] initWithScreen:AnalyticsScreenUser];
 }
 
 - (void)viewDidLoad
@@ -148,17 +145,10 @@
     memberTitleView.delegate = self;
         
     // Define directly the navigation titleView with the custom title view instance. Do not use anymore a container.
-    self.navigationItem.titleView = memberTitleView;
-    
-    // Add tap gesture on member's name
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTapGesture:)];
-    [tap setNumberOfTouchesRequired:1];
-    [tap setNumberOfTapsRequired:1];
-    [tap setDelegate:self];
-    [self.roomMemberNameLabelMask addGestureRecognizer:tap];
-    self.roomMemberNameLabelMask.userInteractionEnabled = YES;
+    self.navigationItem.titleView = memberTitleView;    
     
     // Add tap to show the room member avatar in fullscreen
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTapGesture:)];
     tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTapGesture:)];
     [tap setNumberOfTouchesRequired:1];
     [tap setNumberOfTapsRequired:1];
@@ -211,6 +201,7 @@
     
     self.memberHeaderView.backgroundColor = ThemeService.shared.theme.baseColor;
     self.roomMemberNameLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
+    self.roomMemberUserIdLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
 
     self.roomMemberStatusLabel.textColor = ThemeService.shared.theme.tintColor;
     self.roomMemberPowerLevelLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
@@ -242,9 +233,8 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"RoomMemberDetails"];
+    
+    [self.screenTracker trackScreen];
 
     [self userInterfaceThemeDidChange];
 
@@ -341,15 +331,19 @@
         return [AvatarGenerator generateAvatarForMatrixItem:self.mxRoomMember.userId withDisplayName:self.mxRoomMember.displayname];
     }
     
-    return [MXKTools paintImage:[UIImage imageNamed:@"placeholder"]
+    return [MXKTools paintImage:AssetImages.placeholder.image
                       withColor:ThemeService.shared.theme.tintColor];
 }
 
 - (void)updateMemberInfo
 {
     if (self.mxRoomMember)
-    {
-        self.roomMemberNameLabel.text = self.mxRoomMember.displayname ? self.mxRoomMember.displayname : self.mxRoomMember.userId;
+    {        
+        self.roomMemberNameContainerView.hidden = !self.mxRoomMember.displayname;
+        
+        self.roomMemberNameLabel.text = self.mxRoomMember.displayname; 
+        
+        self.roomMemberUserIdLabel.text = self.mxRoomMember.userId;    
         
         // Update member power level
         MXWeakify(self);
@@ -357,17 +351,21 @@
             MXStrongifyAndReturnIfNil(self);
 
             MXRoomPowerLevels *powerLevels = [roomState powerLevels];
-            NSInteger powerLevel = [powerLevels powerLevelOfUserWithUserID:self.mxRoomMember.userId];
+            NSInteger powerLevel = [roomState powerLevelOfUserWithUserID:self.mxRoomMember.userId];
             
             RoomPowerLevel roomPowerLevel = [RoomPowerLevelHelper roomPowerLevelFrom:powerLevel];
             
             switch (roomPowerLevel) {
+                case RoomPowerLevelOwner:
+                    self.roomMemberPowerLevelLabel.text = [VectorL10n roomMemberPowerLevelOwnerIn:self.mxRoom.summary.displayName];
+                    self.roomMemberPowerLevelContainerView.hidden = NO;
+                    break;
                 case RoomPowerLevelAdmin:
-                    self.roomMemberPowerLevelLabel.text = [VectorL10n roomMemberPowerLevelAdminIn:self.mxRoom.summary.displayname];
+                    self.roomMemberPowerLevelLabel.text = [VectorL10n roomMemberPowerLevelAdminIn:self.mxRoom.summary.displayName];
                     self.roomMemberPowerLevelContainerView.hidden = NO;
                     break;
                 case RoomPowerLevelModerator:
-                    self.roomMemberPowerLevelLabel.text = [VectorL10n roomMemberPowerLevelModeratorIn:self.mxRoom.summary.displayname];
+                    self.roomMemberPowerLevelLabel.text = [VectorL10n roomMemberPowerLevelModeratorIn:self.mxRoom.summary.displayName];
                     self.roomMemberPowerLevelContainerView.hidden = NO;
                     break;
                 default:
@@ -437,7 +435,9 @@
 
 - (void)startUserVerification
 {
-    [[AppDelegate theDelegate] presentUserVerificationForRoomMember:self.mxRoomMember session:self.mainSession];
+    [[AppDelegate theDelegate] presentUserVerificationForRoomMember:self.mxRoomMember session:self.mainSession completion:^{
+        [self refreshUserEncryptionTrustLevel];
+    }];
 }
 
 - (void)presentUserVerification
@@ -446,6 +446,7 @@
                                                                                                                                                            session:self.mxRoom.mxSession
                                                                                                                                                             userId:self.mxRoomMember.userId
                                                                                                                                                    userDisplayName:self.mxRoomMember.displayname];
+    userVerificationCoordinatorBridgePresenter.delegate = self;
     [userVerificationCoordinatorBridgePresenter start];
     self.userVerificationCoordinatorBridgePresenter = userVerificationCoordinatorBridgePresenter;
 }
@@ -457,6 +458,7 @@
 
 - (void)showRoomWithId:(NSString*)roomId
 {
+    Analytics.shared.viewRoomTrigger = AnalyticsViewRoomTriggerRoomMemberDetail;
     [[AppDelegate theDelegate] showRoom:roomId andEventId:nil withMatrixSession:self.mainSession];
 }
 
@@ -502,8 +504,8 @@
     
     // Check user's power level before allowing an action (kick, ban, ...)
     MXRoomPowerLevels *powerLevels = [self.mxRoom.dangerousSyncState powerLevels];
-    NSInteger memberPowerLevel = [powerLevels powerLevelOfUserWithUserID:self.mxRoomMember.userId];
-    NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
+    NSInteger memberPowerLevel = [self.mxRoom.dangerousSyncState powerLevelOfUserWithUserID:self.mxRoomMember.userId];
+    NSInteger oneSelfPowerLevel = [self.mxRoom.dangerousSyncState powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
     
     [adminActionsArray removeAllObjects];
     [otherActionsArray removeAllObjects];
@@ -626,7 +628,7 @@
         }
         
         // Check whether the option Ignore may be presented
-        if (RiotSettings.shared.roomMemberScreenShowIgnore && self.mxRoomMember.membership == MXMembershipJoin)
+        if (RiotSettings.shared.roomMemberScreenShowIgnore)
         {
             // is he already ignored ?
             if (![self.mainSession isUserIgnored:self.mxRoomMember.userId])
@@ -971,7 +973,7 @@
         }
         else
         {
-            roomCell.avatarImageView.image = [UIImage imageNamed:@"start_chat"];
+            roomCell.avatarImageView.image = AssetImages.startChat.image;
             roomCell.avatarImageView.defaultBackgroundColor = [UIColor clearColor];
             roomCell.avatarImageView.userInteractionEnabled = NO;
             roomCell.titleLabel.text = [VectorL10n roomParticipantsActionStartNewChat];
@@ -1132,7 +1134,7 @@
                     textField.keyboardType = UIKeyboardTypeDefault;
                 }];
                 
-                [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+                [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                                  style:UIAlertActionStyleDefault
                                                                handler:^(UIAlertAction * action) {
                                                                    
@@ -1144,7 +1146,7 @@
                                                                    
                                                                }]];
                 
-                [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ban]
+                [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n ban]
                                                                  style:UIAlertActionStyleDefault handler:^(UIAlertAction * action) {
                                                                      
                                                                      if (weakSelf)
@@ -1196,7 +1198,7 @@
                     textField.keyboardType = UIKeyboardTypeDefault;
                 }];
                 
-                [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+                [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                                  style:UIAlertActionStyleDefault
                                                                handler:^(UIAlertAction * action) {
                                                                    
@@ -1257,20 +1259,7 @@
 {
     UIView *view = tapGestureRecognizer.view;
     
-    if (view == self.roomMemberNameLabelMask && self.mxRoomMember.displayname)
-    {
-        if ([self.roomMemberNameLabel.text isEqualToString:self.mxRoomMember.displayname])
-        {
-            // Display room member matrix id
-            self.roomMemberNameLabel.text = self.mxRoomMember.userId;
-        }
-        else
-        {
-            // Restore display name
-            self.roomMemberNameLabel.text = self.mxRoomMember.displayname;
-        }
-    }
-    else if (view == memberTitleView.memberAvatarMask || view == self.roomMemberAvatarMask)
+    if (view == memberTitleView.memberAvatarMask || view == self.roomMemberAvatarMask)
     {
         MXWeakify(self);
         
@@ -1278,7 +1267,7 @@
         __block MXKImageView * avatarFullScreenView = [[MXKImageView alloc] initWithFrame:CGRectZero];
         avatarFullScreenView.stretchable = YES;
 
-        [avatarFullScreenView setRightButtonTitle:[MatrixKitL10n ok]
+        [avatarFullScreenView setRightButtonTitle:[VectorL10n ok]
                                           handler:^(MXKImageView* imageView, NSString* buttonTitle) {
                                               
                                               MXStrongifyAndReturnIfNil(self);
@@ -1340,6 +1329,7 @@
 
 - (void)keyVerificationCoordinatorBridgePresenterDelegateDidComplete:(KeyVerificationCoordinatorBridgePresenter *)coordinatorBridgePresenter otherUserId:(NSString * _Nonnull)otherUserId otherDeviceId:(NSString * _Nonnull)otherDeviceId
 {
+    [self refreshUserEncryptionTrustLevel];
     [self dismissKeyVerificationCoordinatorBridgePresenter];
 }
 
@@ -1352,6 +1342,13 @@
 {
     [keyVerificationCoordinatorBridgePresenter dismissWithAnimated:YES completion:nil];
     keyVerificationCoordinatorBridgePresenter = nil;
+}
+
+#pragma mark - UserVerificationCoordinatorBridgePresenterDelegate
+
+- (void)userVerificationCoordinatorBridgePresenterDelegateDidComplete:(UserVerificationCoordinatorBridgePresenter *)coordinatorBridgePresenter
+{
+    [self refreshUserEncryptionTrustLevel];
 }
 
 @end

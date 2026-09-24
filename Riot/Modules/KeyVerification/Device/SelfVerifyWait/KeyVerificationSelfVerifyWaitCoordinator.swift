@@ -25,9 +25,9 @@ final class KeyVerificationSelfVerifyWaitCoordinator: KeyVerificationSelfVerifyW
     
     // MARK: Private
     
-    private let session: MXSession
     private var keyVerificationSelfVerifyWaitViewModel: KeyVerificationSelfVerifyWaitViewModelType
     private let keyVerificationSelfVerifyWaitViewController: KeyVerificationSelfVerifyWaitViewController
+    private let cancellable: Bool
     
     // MARK: Public
 
@@ -38,13 +38,12 @@ final class KeyVerificationSelfVerifyWaitCoordinator: KeyVerificationSelfVerifyW
     
     // MARK: - Setup
     
-    init(session: MXSession, isNewSignIn: Bool) {
-        self.session = session
-        
-        let keyVerificationSelfVerifyWaitViewModel = KeyVerificationSelfVerifyWaitViewModel(session: self.session, isNewSignIn: isNewSignIn)
-        let keyVerificationSelfVerifyWaitViewController = KeyVerificationSelfVerifyWaitViewController.instantiate(with: keyVerificationSelfVerifyWaitViewModel)
+    init(session: MXSession, isNewSignIn: Bool, cancellable: Bool) {
+        let keyVerificationSelfVerifyWaitViewModel = KeyVerificationSelfVerifyWaitViewModel(session: session, isNewSignIn: isNewSignIn)
+        let keyVerificationSelfVerifyWaitViewController = KeyVerificationSelfVerifyWaitViewController.instantiate(with: keyVerificationSelfVerifyWaitViewModel, cancellable: cancellable)
         self.keyVerificationSelfVerifyWaitViewModel = keyVerificationSelfVerifyWaitViewModel
         self.keyVerificationSelfVerifyWaitViewController = keyVerificationSelfVerifyWaitViewController
+        self.cancellable = cancellable
     }
     
     // MARK: - Public methods
@@ -55,6 +54,7 @@ final class KeyVerificationSelfVerifyWaitCoordinator: KeyVerificationSelfVerifyW
     
     func toPresentable() -> UIViewController {
         return self.keyVerificationSelfVerifyWaitViewController
+            .vc_setModalFullScreen(!self.cancellable)
     }
 }
 
@@ -65,7 +65,7 @@ extension KeyVerificationSelfVerifyWaitCoordinator: KeyVerificationSelfVerifyWai
         self.delegate?.keyVerificationSelfVerifyWaitCoordinator(self, didAcceptKeyVerificationRequest: keyVerificationRequest)
     }
     
-    func keyVerificationSelfVerifyWaitViewModel(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType, didAcceptIncomingSASTransaction incomingSASTransaction: MXIncomingSASTransaction) {
+    func keyVerificationSelfVerifyWaitViewModel(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType, didAcceptIncomingSASTransaction incomingSASTransaction: MXSASTransaction) {
         self.delegate?.keyVerificationSelfVerifyWaitCoordinator(self, didAcceptIncomingSASTransaction: incomingSASTransaction)
     }
     
@@ -75,5 +75,9 @@ extension KeyVerificationSelfVerifyWaitCoordinator: KeyVerificationSelfVerifyWai
     
     func keyVerificationSelfVerifyWaitViewModel(_ coordinator: KeyVerificationSelfVerifyWaitViewModelType, wantsToRecoverSecretsWith secretsRecoveryMode: SecretsRecoveryMode) {
         self.delegate?.keyVerificationSelfVerifyWaitCoordinator(self, wantsToRecoverSecretsWith: secretsRecoveryMode)
+    }
+
+    func keyVerificationSelfVerifyWaitViewModelWantsToResetSecrets(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType) {
+        self.delegate?.keyVerificationSelfVerifyWaitCoordinatorWantsToResetSecrets(self)
     }
 }

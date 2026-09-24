@@ -1,70 +1,54 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import SwiftUI
 import DesignKit
+import SwiftUI
 
-@available(iOS 14.0, *)
 struct AvatarImage: View {
-    
     @Environment(\.theme) var theme: ThemeSwiftUI
-    @Environment(\.dependencies) var dependencies: DependencyContainer
-    @StateObject var viewModel = AvatarViewModel()
+    @EnvironmentObject var viewModel: AvatarViewModel
     
     var mxContentUri: String?
     var matrixItemId: String
     var displayName: String?
     var size: AvatarSize
     
+    @State private var avatar: AvatarViewState = .empty
+    
     var body: some View {
         Group {
-            switch viewModel.viewState {
+            switch avatar {
             case .empty:
                 ProgressView()
             case .placeholder(let firstCharacter, let colorIndex):
-                Text(firstCharacter)
-                    .padding(4)
-                    .frame(width: CGFloat(size.rawValue), height: CGFloat(size.rawValue))
-                    .foregroundColor(.white)
-                    .background(theme.colors.namesAndAvatars[colorIndex])
-                    .clipShape(Circle())
-                    // Make the text resizable (i.e. Make it large and then allow it to scale down)
-                    .font(.system(size: 200))
-                    .minimumScaleFactor(0.001)
+                PlaceholderAvatarImage(firstCharacter: firstCharacter,
+                                       colorIndex: colorIndex)
             case .avatar(let image):
                 Image(uiImage: image)
                     .resizable()
-                    .frame(width: CGFloat(size.rawValue), height: CGFloat(size.rawValue))
-                    .clipShape(Circle())
             }
         }
+        .frame(maxWidth: CGFloat(size.rawValue), maxHeight: CGFloat(size.rawValue))
+        .clipShape(Circle())
         .onAppear {
-            viewModel.inject(dependencies: dependencies)
-            viewModel.loadAvatar(
-                mxContentUri: mxContentUri,
-                matrixItemId: matrixItemId,
-                displayName: displayName,
-                colorCount: theme.colors.namesAndAvatars.count,
-                avatarSize: size
-            )
+            avatar = viewModel.placeholderAvatar(matrixItemId: matrixItemId,
+                                                 displayName: displayName,
+                                                 colorCount: theme.colors.namesAndAvatars.count)
+            viewModel.loadAvatar(mxContentUri: mxContentUri,
+                                 matrixItemId: matrixItemId,
+                                 displayName: displayName,
+                                 colorCount: theme.colors.namesAndAvatars.count,
+                                 avatarSize: size ) { newState in
+                avatar = newState
+            }
         }
     }
 }
 
-@available(iOS 14.0, *)
 extension AvatarImage {
     init(avatarData: AvatarInputProtocol, size: AvatarSize) {
         self.init(
@@ -76,7 +60,18 @@ extension AvatarImage {
     }
 }
 
-@available(iOS 14.0, *)
+extension AvatarImage {
+    func border(color: Color) -> some View {
+        modifier(BorderModifier(color: color, borderWidth: 3, shape: Circle()))
+    }
+    
+    /// Use display name color as border color by default
+    func border() -> some View {
+        let borderColor = theme.userColor(for: matrixItemId)
+        return border(color: borderColor)
+    }
+}
+
 struct AvatarImage_Previews: PreviewProvider {
     static let mxContentUri = "fakeUri"
     static let name = "Alice"
@@ -94,7 +89,7 @@ struct AvatarImage_Previews: PreviewProvider {
                     AvatarImage(mxContentUri: nil, matrixItemId: name, displayName: name, size: .xLarge)
                 }
             }
-            .addDependency(MockAvatarService.example)
+            .environmentObject(AvatarViewModel.withMockedServices())
         }
     }
 }

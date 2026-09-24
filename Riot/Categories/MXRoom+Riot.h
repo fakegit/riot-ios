@@ -1,30 +1,14 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
-#import <MatrixKit/MatrixKit.h>
-
 #import "UserEncryptionTrustLevel.h"
-
-typedef NS_ENUM(NSUInteger, RoomSentStatus)
-{
-    RoomSentStatusOk,
-    RoomSentStatusSentFailed,
-    RoomSentStatusSentFailedDueToUnknownDevices
-};
+#import <MatrixSDK/MatrixSDK.h>
 
 /**
  Define a `MXRoom` category at Riot level.
@@ -50,9 +34,6 @@ typedef NS_ENUM(NSUInteger, RoomSentStatus)
  Observer when a rules deletion succeeds.
  */
 @property (nonatomic) id notificationCenterDidUpdateObserver;
-
-/// Check if all messages have been sent.
-@property (nonatomic, readonly) RoomSentStatus sentStatus;
 
 /**
  Update the room tag.

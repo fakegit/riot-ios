@@ -1,17 +1,8 @@
 /*
- Copyright 2019 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2019-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -23,8 +14,6 @@ import Foundation
 }
 
 private enum DiscoverySectionRows {
-    case info(text: String)
-    case attributedInfo(attributedText: NSAttributedString)
     case button(title: String, action: () -> Void)
     case threePid(threePid: MX3PID)
 }
@@ -40,6 +29,9 @@ private enum DiscoverySectionRows {
     // MARK: - Properties
     
     @objc weak var delegate: SettingsDiscoveryTableViewSectionDelegate?
+    
+    @objc var attributedFooterTitle: NSAttributedString?
+    @objc var footerShouldScrollToUserSettings = false
     
     // MARK: Private
     
@@ -89,20 +81,6 @@ private enum DiscoverySectionRows {
         }
         
         switch discoveryRow {
-        case .info(let infoText):
-            if let infoCell: MXKTableViewCell = self.cellType(at: row) {
-                infoCell.textLabel?.numberOfLines = 0
-                infoCell.textLabel?.text = infoText
-                infoCell.selectionStyle = .none
-                cell = infoCell
-            }
-        case .attributedInfo(attributedText: let infoText):
-            if let infoCell: MXKTableViewCell = self.cellType(at: row) {
-                infoCell.textLabel?.numberOfLines = 0
-                infoCell.textLabel?.attributedText = infoText
-                infoCell.selectionStyle = .none
-                cell = infoCell
-            }
         case .button(title: let title, action: let action):
             if let buttonCell: MXKTableViewCellWithButton = self.cellType(at: row) {
                 buttonCell.mxkButton.setTitle(title, for: .normal)
@@ -145,15 +123,6 @@ private enum DiscoverySectionRows {
         switch discoveryRow {
         case .threePid(threePid: let threePid):
             self.viewModel.process(viewAction: .select(threePid: threePid))
-        case .attributedInfo(attributedText: _):
-            if case let .loaded(displayMode) = self.viewState {
-                switch displayMode {
-                case .noThreePidsAdded, .threePidsAdded:
-                    self.viewModel.process(viewAction: .tapUserSettingsLink)
-                default:
-                    break
-                }
-            }            
         default:
             break
         }
@@ -183,6 +152,10 @@ private enum DiscoverySectionRows {
     
     private func updateRows() {
         
+        // reset the footer
+        attributedFooterTitle = nil
+        footerShouldScrollToUserSettings = false
+        
         let discoveryRows: [DiscoverySectionRows]
         
         switch self.viewState {
@@ -191,20 +164,21 @@ private enum DiscoverySectionRows {
         case .loaded(let displayMode):
             switch displayMode {
             case .noIdentityServer:
-                discoveryRows = [
-                    .info(text: VectorL10n.settingsDiscoveryNoIdentityServer)
-                ]
+                discoveryRows = []
+                attributedFooterTitle = NSAttributedString(string: VectorL10n.settingsDiscoveryNoIdentityServer)
             case .termsNotSigned(let host):
                 discoveryRows = [
-                    .info(text: VectorL10n.settingsDiscoveryTermsNotSigned(host)),
-                    .button(title: VectorL10n.accept, action: { [weak self] in
+                    .button(title: VectorL10n.settingsDiscoveryAcceptTerms, action: { [weak self] in
                         self?.viewModel.process(viewAction: .acceptTerms)
                     })
                 ]
+                
+                attributedFooterTitle = NSAttributedString(string: VectorL10n.settingsDiscoveryTermsNotSigned(host))
             case .noThreePidsAdded:
-                discoveryRows = [
-                    .attributedInfo(attributedText: self.threePidsManagementInfoAttributedString())
-                ]
+                discoveryRows = []
+                
+                attributedFooterTitle = threePidsManagementInfoAttributedString()
+                footerShouldScrollToUserSettings = true
             case .threePidsAdded(let emails, let phoneNumbers):
                 
                 let emailThreePids = emails.map { (email) -> DiscoverySectionRows in
@@ -215,32 +189,28 @@ private enum DiscoverySectionRows {
                     return .threePid(threePid: phoneNumber)
                 }
                 
-                var threePidsRows: [DiscoverySectionRows] = []
-                threePidsRows.append(contentsOf: emailThreePids)
-                threePidsRows.append(contentsOf: phoneNumbersThreePids)
-                threePidsRows.append(.attributedInfo(attributedText: self.threePidsManagementInfoAttributedString()))
+                discoveryRows = emailThreePids + phoneNumbersThreePids
                 
-                discoveryRows = threePidsRows
+                attributedFooterTitle = threePidsManagementInfoAttributedString()
+                footerShouldScrollToUserSettings = true
             }
         case .error:
             discoveryRows = [
-                .info(text: VectorL10n.settingsDiscoveryErrorMessage),
                 .button(title: VectorL10n.retry, action: { [weak self] in
                     self?.viewModel.process(viewAction: .load)
                 })
             ]
+            attributedFooterTitle = NSAttributedString(string: VectorL10n.settingsDiscoveryErrorMessage)
         }
         
         self.discoveryRows = discoveryRows
     }
     
     private func threePidsManagementInfoAttributedString() -> NSAttributedString {
-        let attributedInfoString = NSMutableAttributedString(string: VectorL10n.settingsDiscoveryThreePidsManagementInformationPart1,
-                                                             attributes: [.foregroundColor: self.theme.textPrimaryColor, .font: Constants.defaultFont])
+        let attributedInfoString = NSMutableAttributedString(string: VectorL10n.settingsDiscoveryThreePidsManagementInformationPart1)
         attributedInfoString.append(NSAttributedString(string: VectorL10n.settingsDiscoveryThreePidsManagementInformationPart2,
-                                                       attributes: [.foregroundColor: self.theme.tintColor, .font: Constants.defaultFont]))
-        attributedInfoString.append(NSAttributedString(string: VectorL10n.settingsDiscoveryThreePidsManagementInformationPart3,
-                                                       attributes: [.foregroundColor: self.theme.tintColor, .font: Constants.defaultFont]))
+                                                       attributes: [.foregroundColor: self.theme.tintColor]))
+        attributedInfoString.append(NSAttributedString(string: VectorL10n.settingsDiscoveryThreePidsManagementInformationPart3))
         return attributedInfoString
     }
 }

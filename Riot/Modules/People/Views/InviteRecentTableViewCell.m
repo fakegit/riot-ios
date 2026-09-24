@@ -1,18 +1,10 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "InviteRecentTableViewCell.h"
@@ -22,7 +14,7 @@
 #import "MXEvent.h"
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #pragma mark - Constant definitions
 
@@ -40,18 +32,16 @@ NSString *const kInviteRecentTableViewCellRoomKey = @"kInviteRecentTableViewCell
 {
     [super awakeFromNib];
     
-    [self.leftButton.layer setCornerRadius:5];
+    [self.leftButton.layer setCornerRadius:8];
     self.leftButton.clipsToBounds = YES;
     [self.leftButton setTitle:[VectorL10n decline] forState:UIControlStateNormal];
     [self.leftButton addTarget:self action:@selector(onDeclinePressed:) forControlEvents:UIControlEventTouchUpInside];
     
-    [self.rightButton.layer setCornerRadius:5];
+    [self.rightButton.layer setCornerRadius:8];
     self.rightButton.clipsToBounds = YES;
     [self.rightButton setTitle:[VectorL10n accept] forState:UIControlStateNormal];
     [self.rightButton addTarget:self action:@selector(onRightButtonPressed:) forControlEvents:UIControlEventTouchUpInside];
-    
-    [self.noticeBadgeView.layer setCornerRadius:10];
-    
+
     self.selectionStyle = UITableViewCellSelectionStyleNone;
 }
 
@@ -59,10 +49,14 @@ NSString *const kInviteRecentTableViewCellRoomKey = @"kInviteRecentTableViewCell
 {
     [super customizeTableViewCellRendering];
     
-    self.leftButton.backgroundColor = ThemeService.shared.theme.tintColor;
+    self.leftButton.backgroundColor = UIColor.clearColor;
+    self.leftButton.layer.borderWidth = 1;
+    self.leftButton.layer.borderColor = ThemeService.shared.theme.colors.alert.CGColor;
+    self.leftButton.titleLabel.font = ThemeService.shared.theme.fonts.body;
+    [self.leftButton setTitleColor:ThemeService.shared.theme.colors.alert forState:UIControlStateNormal];
+
     self.rightButton.backgroundColor = ThemeService.shared.theme.tintColor;
-    
-    self.noticeBadgeView.backgroundColor = ThemeService.shared.theme.noticeColor;
+    self.rightButton.titleLabel.font = ThemeService.shared.theme.fonts.body;
 }
 
 - (void)prepareForReuse
@@ -87,7 +81,7 @@ NSString *const kInviteRecentTableViewCellRoomKey = @"kInviteRecentTableViewCell
 {
     if (self.delegate)
     {
-        MXRoom *room = roomCellData.roomSummary.room;
+        MXRoom *room = [roomCellData.mxSession roomWithRoomId:roomCellData.roomIdentifier];
         
         if (room)
         {
@@ -99,16 +93,11 @@ NSString *const kInviteRecentTableViewCellRoomKey = @"kInviteRecentTableViewCell
 - (void)render:(MXKCellData *)cellData
 {
     [super render:cellData];
-        
-    MXRoom *room = roomCellData.roomSummary.room;
     
-    if (room.roomId)
-    {
-        [self updateViewsWithRoom:room showPreviewButton:NO];
-    }
+    [self updateViewsWithRoom:roomCellData.roomSummary showPreviewButton:NO];
 }
 
-- (void)updateViewsWithRoom:(MXRoom*)room showPreviewButton:(BOOL)showPreviewButton
+- (void)updateViewsWithRoom:(id<MXRoomSummaryProtocol>)room showPreviewButton:(BOOL)showPreviewButton
 {
     NSString *rightButtonTitle;
     

@@ -1,17 +1,8 @@
 /*
- Copyright 2020 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2020-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -26,6 +17,7 @@ final class SecretsRecoveryCoordinator: SecretsRecoveryCoordinatorType {
     private let navigationRouter: NavigationRouterType
     private let recoveryMode: SecretsRecoveryMode
     private let recoveryGoal: SecretsRecoveryGoal
+    private let cancellable: Bool
     
     // MARK: Public
     
@@ -35,10 +27,11 @@ final class SecretsRecoveryCoordinator: SecretsRecoveryCoordinatorType {
     
     // MARK: - Setup
     
-    init(session: MXSession, recoveryMode: SecretsRecoveryMode, recoveryGoal: SecretsRecoveryGoal, navigationRouter: NavigationRouterType? = nil) {
+    init(session: MXSession, recoveryMode: SecretsRecoveryMode, recoveryGoal: SecretsRecoveryGoal, navigationRouter: NavigationRouterType? = nil, cancellable: Bool) {
         self.session = session
         self.recoveryMode = recoveryMode
         self.recoveryGoal = recoveryGoal
+        self.cancellable = cancellable
         
         if let navigationRouter = navigationRouter {
             self.navigationRouter = navigationRouter
@@ -76,19 +69,35 @@ final class SecretsRecoveryCoordinator: SecretsRecoveryCoordinatorType {
     }
     
     func toPresentable() -> UIViewController {
-        return self.navigationRouter.toPresentable()
+        return self.navigationRouter
+            .toPresentable()
+            .vc_setModalFullScreen(!self.cancellable)
     }
     
     // MARK: - Private
     
+    private var dehydrationService: DehydrationService? {
+        if self.session.vc_homeserverConfiguration().encryption.deviceDehydrationEnabled {
+            return self.session.crypto.dehydrationService
+        }
+        
+        return nil
+    }
+    
     private func createRecoverFromKeyCoordinator() -> SecretsRecoveryWithKeyCoordinator {
-        let coordinator = SecretsRecoveryWithKeyCoordinator(recoveryService: self.session.crypto.recoveryService, recoveryGoal: self.recoveryGoal)
+        let coordinator = SecretsRecoveryWithKeyCoordinator(recoveryService: self.session.crypto.recoveryService,
+                                                            recoveryGoal: self.recoveryGoal,
+                                                            cancellable: self.cancellable,
+                                                            dehydrationService: dehydrationService)
         coordinator.delegate = self
         return coordinator
     }
     
     private func createRecoverFromPassphraseCoordinator() -> SecretsRecoveryWithPassphraseCoordinator {
-        let coordinator = SecretsRecoveryWithPassphraseCoordinator(recoveryService: self.session.crypto.recoveryService, recoveryGoal: self.recoveryGoal)
+        let coordinator = SecretsRecoveryWithPassphraseCoordinator(recoveryService: self.session.crypto.recoveryService,
+                                                                   recoveryGoal: self.recoveryGoal,
+                                                                   cancellable: self.cancellable,
+                                                                   dehydrationService: dehydrationService)
         coordinator.delegate = self
         return coordinator
     }
@@ -115,13 +124,14 @@ final class SecretsRecoveryCoordinator: SecretsRecoveryCoordinatorType {
     }
     
     private func showSecureBackupSetup(checkKeyBackup: Bool) {
-        let coordinator = SecureBackupSetupCoordinator(session: self.session, checkKeyBackup: checkKeyBackup, navigationRouter: self.navigationRouter)
+        let coordinator = SecureBackupSetupCoordinator(session: self.session, checkKeyBackup: checkKeyBackup, navigationRouter: self.navigationRouter, cancellable: self.cancellable)
         coordinator.delegate = self
-        coordinator.start()
-        
-        self.navigationRouter.push(coordinator.toPresentable(), animated: true, popCompletion: { [weak self] in
+        // Fix: calling coordinator.start() will update the navigationRouter without a popCompletion
+        coordinator.start(popCompletion: { [weak self] in
             self?.remove(childCoordinator: coordinator)
         })
+        // Fix: do not push the presentable from the coordinator to the navigation router as this has already been done by coordinator.start().
+        //      Also, coordinator.toPresentable() returns a navigation controller, which cannot be pushed into a navigation router.
         self.add(childCoordinator: coordinator)
     }
 }

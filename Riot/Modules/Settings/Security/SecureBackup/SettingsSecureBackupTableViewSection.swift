@@ -1,17 +1,8 @@
 /*
- Copyright 2021 New Vector Ltd
+Copyright 2021-2024 New Vector Ltd.
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import UIKit
@@ -21,7 +12,6 @@ import UIKit
     func settingsSecureBackupTableViewSectionDidUpdate(_ settingsSecureBackupTableViewSection: SettingsSecureBackupTableViewSection)
 
     func settingsSecureBackupTableViewSection(_ settingsSecureBackupTableViewSection: SettingsSecureBackupTableViewSection, textCellForRow: Int) -> MXKTableViewCellWithTextView
-    func settingsSecureBackupTableViewSection(_ settingsSecureBackupTableViewSection: SettingsSecureBackupTableViewSection, descriptionCellForRow: Int) -> MXKTableViewCell
     func settingsSecureBackupTableViewSection(_ settingsSecureBackupTableViewSection: SettingsSecureBackupTableViewSection, buttonCellForRow: Int) -> MXKTableViewCellWithButton
 
     // Secure backup
@@ -39,7 +29,6 @@ import UIKit
 
 private enum BackupRows {
     case info(text: String)
-    case description(text: String)
     case createSecureBackupAction
     case resetSecureBackupAction
     case createKeyBackupAction
@@ -96,8 +85,6 @@ private enum BackupRows {
         switch backupRow {
         case .info(let text):
             cell = self.textCell(atRow: row, text: text)
-        case .description(let text):
-            cell = self.descriptionCell(atRow: row, text: text)
         case .createSecureBackupAction:
             cell = self.buttonCellForCreateSecureBackup(atRow: row)
         case .resetSecureBackupAction:
@@ -130,8 +117,7 @@ private enum BackupRows {
         switch self.viewState {
         case .loading:
             backupRows = [
-                .info(text: VectorL10n.securitySettingsSecureBackupInfoChecking),
-                .description(text: VectorL10n.securitySettingsSecureBackupDescription)
+                .info(text: VectorL10n.securitySettingsSecureBackupInfoChecking)
             ]
             
         case .noSecureBackup(let keyBackupState):
@@ -143,16 +129,26 @@ private enum BackupRows {
                 
                 backupRows = [
                     .info(text: infoText),
-                    .createSecureBackupAction,
-                    .description(text: VectorL10n.securitySettingsSecureBackupDescription)
+                    .createSecureBackupAction
                 ]
-            case .keyBackup(let keyBackupVersion, _, _),
-                 .keyBackupNotTrusted(let keyBackupVersion, _):     // Manage the key backup in the same way for the moment
+            case .keyBackup(let keyBackupVersion, _, let progress):
+                if let progress = progress {
+                    backupRows = [
+                        .info(text: importProgressText(for: progress)),
+                        .deleteKeyBackupAction(keyBackupVersion: keyBackupVersion)
+                    ]
+                } else {
+                    backupRows = [
+                        .info(text: VectorL10n.securitySettingsSecureBackupInfoValid),
+                        .restoreFromKeyBackupAction(keyBackupVersion: keyBackupVersion, title: VectorL10n.securitySettingsSecureBackupRestore),
+                        .deleteKeyBackupAction(keyBackupVersion: keyBackupVersion)
+                    ]
+                }
+            case .keyBackupNotTrusted(let keyBackupVersion, _):
                 backupRows = [
                     .info(text: VectorL10n.securitySettingsSecureBackupInfoValid),
                     .restoreFromKeyBackupAction(keyBackupVersion: keyBackupVersion, title: VectorL10n.securitySettingsSecureBackupRestore),
-                    .deleteKeyBackupAction(keyBackupVersion: keyBackupVersion),
-                    .description(text: VectorL10n.securitySettingsSecureBackupDescription)
+                    .deleteKeyBackupAction(keyBackupVersion: keyBackupVersion)
                 ]
             }
         case .secureBackup(let keyBackupState):
@@ -165,21 +161,38 @@ private enum BackupRows {
                 backupRows = [
                     .info(text: infoText),
                     .createKeyBackupAction,
-                    .resetSecureBackupAction,
-                    .description(text: VectorL10n.securitySettingsSecureBackupDescription)
+                    .resetSecureBackupAction
                 ]
-            case .keyBackup(let keyBackupVersion, _, _),
-                 .keyBackupNotTrusted(let keyBackupVersion, _):     // Manage the key backup in the same way for the moment
+            case .keyBackup(let keyBackupVersion, _, let progress):
+                if let progress = progress {
+                    backupRows = [
+                        .info(text: importProgressText(for: progress)),
+                        .deleteKeyBackupAction(keyBackupVersion: keyBackupVersion),
+                        .resetSecureBackupAction
+                    ]
+                } else {
+                    backupRows = [
+                        .info(text: VectorL10n.securitySettingsSecureBackupInfoValid),
+                        .restoreFromKeyBackupAction(keyBackupVersion: keyBackupVersion, title: VectorL10n.securitySettingsSecureBackupRestore),
+                        .deleteKeyBackupAction(keyBackupVersion: keyBackupVersion),
+                        .resetSecureBackupAction
+                    ]
+                }
+            case .keyBackupNotTrusted(let keyBackupVersion, _):
                 backupRows = [
                     .info(text: VectorL10n.securitySettingsSecureBackupInfoValid),
                     .restoreFromKeyBackupAction(keyBackupVersion: keyBackupVersion, title: VectorL10n.securitySettingsSecureBackupRestore),
                     .deleteKeyBackupAction(keyBackupVersion: keyBackupVersion),
-                    .resetSecureBackupAction,
-                    .description(text: VectorL10n.securitySettingsSecureBackupDescription)
+                    .resetSecureBackupAction
                 ]
             }
         }
         self.backupRows = backupRows
+    }
+    
+    private func importProgressText(for progress: Progress) -> String {
+        let percentage = Int(round(progress.fractionCompleted * 100))
+        return VectorL10n.keyBackupRecoverFromPrivateKeyInfo + " \(percentage)%"
     }
 
     // MARK: - Cells -
@@ -191,16 +204,6 @@ private enum BackupRows {
         
         let cell = delegate.settingsSecureBackupTableViewSection(self, textCellForRow: row)
         cell.mxkTextView.text = text
-        return cell
-    }
-    
-    private func descriptionCell(atRow row: Int, text: String) -> UITableViewCell {
-        guard let delegate = self.delegate else {
-            return UITableViewCell()
-        }
-        
-        let cell = delegate.settingsSecureBackupTableViewSection(self, descriptionCellForRow: row)
-        cell.textLabel?.text = text
         return cell
     }
     

@@ -1,24 +1,15 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "CallViewController.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import "AvatarGenerator.h"
 
@@ -73,20 +64,20 @@ CallAudioRouteMenuViewDelegate>
     
     // Back button
     
-    UIImage *backButtonImage = [UIImage imageNamed:@"back_icon"];
+    UIImage *backButtonImage = AssetImages.backIcon.image;
     [self.backToAppButton setImage:backButtonImage forState:UIControlStateNormal];
     [self.backToAppButton setImage:backButtonImage forState:UIControlStateHighlighted];
     
     // Camera switch
     
-    UIImage *cameraSwitchButtonImage = [UIImage imageNamed:@"camera_switch"];
+    UIImage *cameraSwitchButtonImage = AssetImages.cameraSwitch.image;
     [self.cameraSwitchButton setImage:cameraSwitchButtonImage forState:UIControlStateNormal];
     [self.cameraSwitchButton setImage:cameraSwitchButtonImage forState:UIControlStateHighlighted];
     
     // Audio mute
     
-    UIImage *audioMuteOffButtonImage = [UIImage imageNamed:@"call_audio_mute_off_icon"];
-    UIImage *audioMuteOnButtonImage = [UIImage imageNamed:@"call_audio_mute_on_icon"];
+    UIImage *audioMuteOffButtonImage = AssetImages.callAudioMuteOffIcon.image;
+    UIImage *audioMuteOnButtonImage = AssetImages.callAudioMuteOnIcon.image;
     
     [self.audioMuteButton setImage:audioMuteOffButtonImage forState:UIControlStateNormal];
     [self.audioMuteButton setImage:audioMuteOffButtonImage forState:UIControlStateHighlighted];
@@ -94,8 +85,8 @@ CallAudioRouteMenuViewDelegate>
     
     // Video mute
     
-    UIImage *videoOffButtonImage = [UIImage imageNamed:@"call_video_mute_off_icon"];
-    UIImage *videoOnButtonImage = [UIImage imageNamed:@"call_video_mute_on_icon"];
+    UIImage *videoOffButtonImage = AssetImages.callVideoMuteOffIcon.image;
+    UIImage *videoOnButtonImage = AssetImages.callVideoMuteOnIcon.image;
     
     [self.videoMuteButton setImage:videoOffButtonImage forState:UIControlStateNormal];
     [self.videoMuteButton setImage:videoOffButtonImage forState:UIControlStateHighlighted];
@@ -103,14 +94,14 @@ CallAudioRouteMenuViewDelegate>
     
     //  More
     
-    UIImage *moreButtonImage = [UIImage imageNamed:@"call_more_icon"];
+    UIImage *moreButtonImage = AssetImages.callMoreIcon.image;
     
     [self.moreButtonForVoice setImage:moreButtonImage forState:UIControlStateNormal];
     [self.moreButtonForVideo setImage:moreButtonImage forState:UIControlStateNormal];
     
     // Hang up
     
-    UIImage *hangUpButtonImage = [UIImage imageNamed:@"call_hangup_large"];
+    UIImage *hangUpButtonImage = AssetImages.callHangupLarge.image;
     
     [self.endCallButton setTitle:nil forState:UIControlStateNormal];
     [self.endCallButton setTitle:nil forState:UIControlStateHighlighted];
@@ -269,17 +260,17 @@ CallAudioRouteMenuViewDelegate>
     switch (self.mxCall.audioOutputRouter.currentRoute.routeType)
     {
         case MXiOSAudioOutputRouteTypeBuiltIn:
-            [self.speakerButton setImage:[UIImage imageNamed:@"call_speaker_off_icon"]
+            [self.speakerButton setImage:AssetImages.callSpeakerOffIcon.image
                                 forState:UIControlStateNormal];
             break;
         case MXiOSAudioOutputRouteTypeLoudSpeakers:
-            [self.speakerButton setImage:[UIImage imageNamed:@"call_speaker_on_icon"]
+            [self.speakerButton setImage:AssetImages.callSpeakerOnIcon.image
                                 forState:UIControlStateNormal];
             break;
         case MXiOSAudioOutputRouteTypeExternalWired:
         case MXiOSAudioOutputRouteTypeExternalBluetooth:
         case MXiOSAudioOutputRouteTypeExternalCar:
-            [self.speakerButton setImage:[UIImage imageNamed:@"call_speaker_external_icon"]
+            [self.speakerButton setImage:AssetImages.callSpeakerExternalIcon.image
                                 forState:UIControlStateNormal];
             break;
     }
@@ -370,23 +361,16 @@ CallAudioRouteMenuViewDelegate>
                                                            {
                                                                typeof(self) self = weakSelf;
                                                                self->currentAlert = nil;
-                                                               
-                                                               // Acknowledge the existence of all devices
-                                                               [self startActivityIndicator];
-                                                               [self.mainSession.crypto setDevicesKnown:unknownDevices complete:^{
                                                                    
-                                                                   [self stopActivityIndicator];
-                                                                   
-                                                                   // Retry the call
-                                                                   if (call.isIncoming)
-                                                                   {
-                                                                       [call answer];
-                                                                   }
-                                                                   else
-                                                                   {
-                                                                       [call callWithVideo:call.isVideoCall];
-                                                                   }
-                                                               }];
+                                                               // Retry the call
+                                                               if (call.isIncoming)
+                                                               {
+                                                                   [call answer];
+                                                               }
+                                                               else
+                                                               {
+                                                                   [call callWithVideo:call.isVideoCall];
+                                                               }
                                                            }
                                                            
                                                        }]];
@@ -479,12 +463,12 @@ CallAudioRouteMenuViewDelegate>
     else if (self.mxCall.room)
     {
         return [AvatarGenerator generateAvatarForMatrixItem:self.mxCall.room.roomId
-                                            withDisplayName:self.mxCall.room.summary.displayname
+                                            withDisplayName:self.mxCall.room.summary.displayName
                                                        size:self.callerImageViewWidthConstraint.constant
                                                 andFontSize:fontSize];
     }
     
-    return [MXKTools paintImage:[UIImage imageNamed:@"placeholder"]
+    return [MXKTools paintImage:AssetImages.placeholder.image
                       withColor:self.overriddenTheme.tintColor];
 }
 
@@ -563,6 +547,7 @@ CallAudioRouteMenuViewDelegate>
                 if (self.mxCall.room)
                 {
                     // Open the room page
+                    Analytics.shared.viewRoomTrigger = AnalyticsViewRoomTriggerInCall;
                     [[AppDelegate theDelegate] showRoom:self.mxCall.room.roomId andEventId:nil withMatrixSession:self.mxCall.room.mxSession];
                 }
                 
@@ -645,8 +630,8 @@ CallAudioRouteMenuViewDelegate>
 {
     CallTransferMainViewController *controller = [CallTransferMainViewController instantiateWithSession:self.mainSession ignoredUserIds:@[self.peer.userId]];
     controller.delegate = self;
-    
     UINavigationController *navController = [[RiotNavigationController alloc] initWithRootViewController:controller];
+    [self.mxCall hold:YES];
     [self presentViewController:navController animated:YES completion:nil];
 }
 
@@ -664,9 +649,7 @@ CallAudioRouteMenuViewDelegate>
     {
         return;
     }
-    BOOL result = [self.mxCall sendDTMF:digit
-                               duration:0
-                           interToneGap:0];
+    BOOL result = [self.mxCall sendDTMF:digit];
     
     MXLogDebug(@"[CallViewController] Sending DTMF tones %@", result ? @"succeeded": @"failed");
 }
@@ -686,7 +669,7 @@ CallAudioRouteMenuViewDelegate>
                                                                  message:[VectorL10n callTransferErrorMessage]
                                                           preferredStyle:UIAlertControllerStyleAlert];
         
-        [self->currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
+        [self->currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok]
                                                                style:UIAlertActionStyleDefault
                                                              handler:^(UIAlertAction * action) {
             
@@ -723,7 +706,9 @@ CallAudioRouteMenuViewDelegate>
     {
         MXWeakify(self);
         [self.mainSession.callManager getThirdPartyUserFrom:phoneNumber success:^(MXThirdPartyUserInstance * _Nonnull user) {
-            MXStrongifyAndReturnIfNil(self);
+            if (weakself == nil) {
+                return;
+            }
             
             continueBlock(user.userId);
         } failure:^(NSError * _Nullable error) {
@@ -734,6 +719,7 @@ CallAudioRouteMenuViewDelegate>
 
 - (void)callTransferMainViewControllerDidCancel:(CallTransferMainViewController *)viewController
 {
+    [self.mxCall hold:NO];
     [viewController dismissViewControllerAnimated:YES completion:nil];
 }
 

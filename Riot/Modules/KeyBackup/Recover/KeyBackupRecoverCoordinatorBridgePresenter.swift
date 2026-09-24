@@ -1,17 +1,8 @@
 /*
- Copyright 2019 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2019-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -49,7 +40,12 @@ final class KeyBackupRecoverCoordinatorBridgePresenter: NSObject {
     // MARK: - Public
     
     func present(from viewController: UIViewController, animated: Bool) {
-        let keyBackupSetupCoordinator = KeyBackupRecoverCoordinator(session: self.session, keyBackupVersion: keyBackupVersion)
+        guard let keyBackup = session.crypto?.backup else {
+            MXLog.failure("[KeyBackupRecoverCoordinatorBridgePresenter] Cannot setup backups without backup module")
+            return
+        }
+        
+        let keyBackupSetupCoordinator = KeyBackupRecoverCoordinator(keyBackup: keyBackup, keyBackupVersion: keyBackupVersion)
         keyBackupSetupCoordinator.delegate = self
         viewController.present(keyBackupSetupCoordinator.toPresentable(), animated: animated, completion: nil)
         keyBackupSetupCoordinator.start()
@@ -58,12 +54,16 @@ final class KeyBackupRecoverCoordinatorBridgePresenter: NSObject {
     }
     
     func push(from navigationController: UINavigationController, animated: Bool) {
+        guard let keyBackup = session.crypto?.backup else {
+            MXLog.failure("[KeyBackupRecoverCoordinatorBridgePresenter] Cannot setup backups without backup module")
+            return
+        }
         
         MXLog.debug("[KeyBackupRecoverCoordinatorBridgePresenter] Push complete security from \(navigationController)")
         
-        let navigationRouter = NavigationRouter(navigationController: navigationController)
+        let navigationRouter = NavigationRouterStore.shared.navigationRouter(for: navigationController)
         
-        let keyBackupSetupCoordinator = KeyBackupRecoverCoordinator(session: self.session, keyBackupVersion: keyBackupVersion, navigationRouter: navigationRouter)
+        let keyBackupSetupCoordinator = KeyBackupRecoverCoordinator(keyBackup: keyBackup, keyBackupVersion: keyBackupVersion, navigationRouter: navigationRouter)
         keyBackupSetupCoordinator.delegate = self
         keyBackupSetupCoordinator.start() // Will trigger view controller push
         

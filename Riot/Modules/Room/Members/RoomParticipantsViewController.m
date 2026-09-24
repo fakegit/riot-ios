@@ -1,25 +1,17 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomParticipantsViewController.h"
 
 #import "RoomMemberDetailsViewController.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import "Contact.h"
 
@@ -29,7 +21,7 @@
 
 #import "RageShakeManager.h"
 
-@interface RoomParticipantsViewController ()
+@interface RoomParticipantsViewController () <UITableViewDelegate, UITableViewDataSource, UISearchBarDelegate, UIGestureRecognizerDelegate, MXKRoomMemberDetailsViewControllerDelegate, RoomParticipantsInviteCoordinatorBridgePresenterDelegate>
 {
     // Search result
     NSString *currentSearchText;
@@ -49,12 +41,13 @@
     id roomDidFlushDataNotificationObserver;
     
     RoomMemberDetailsViewController *memberDetailsViewController;
-    ContactsTableViewController     *contactsPickerViewController;
     
     UIAlertController *currentAlert;
     
     // Observe kThemeServiceDidChangeThemeNotification to handle user interface theme change.
     id kThemeServiceDidChangeThemeNotificationObserver;
+    
+    RoomParticipantsInviteCoordinatorBridgePresenter *invitePresenter;
 }
 
 @end
@@ -85,6 +78,7 @@
     self.enableBarTintColorStatusChange = NO;
     self.rageShakeManager = [RageShakeManager sharedManager];
     self.showParticipantCustomAccessoryView = YES;
+    self.showInviteUserFab = YES;
 }
 
 - (void)viewDidLoad
@@ -102,6 +96,8 @@
     // Adjust Top and Bottom constraints to take into account potential navBar and tabBar.
     [NSLayoutConstraint deactivateConstraints:@[_searchBarTopConstraint]];
     
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated"
     _searchBarTopConstraint = [NSLayoutConstraint constraintWithItem:self.topLayoutGuide
                                                            attribute:NSLayoutAttributeBottom
                                                            relatedBy:NSLayoutRelationEqual
@@ -109,6 +105,7 @@
                                                            attribute:NSLayoutAttributeTop
                                                           multiplier:1.0f
                                                             constant:0.0f];
+    #pragma clang diagnostic pop
     
     [NSLayoutConstraint activateConstraints:@[_searchBarTopConstraint]];
     
@@ -140,11 +137,13 @@
     [self.tableView registerClass:ContactTableViewCell.class forCellReuseIdentifier:@"ParticipantTableViewCellId"];
     
     
-    
-    // Add invite members button programmatically
-    [self vc_addFABWithImage:[UIImage imageNamed:@"add_member_floating_action"]
-                      target:self
-                      action:@selector(onAddParticipantButtonPressed)];
+    if (_showInviteUserFab)
+    {
+        // Add invite members button programmatically
+        [self vc_addFABWithImage:AssetImages.addMemberFloatingAction.image
+                          target:self
+                          action:@selector(onAddParticipantButtonPressed)];
+    }
     
     // Observe user interface theme change.
     kThemeServiceDidChangeThemeNotificationObserver = [[NSNotificationCenter defaultCenter] addObserverForName:kThemeServiceDidChangeThemeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notif) {
@@ -214,7 +213,7 @@
     if (membersListener)
     {
         MXWeakify(self);
-        [self.mxRoom liveTimeline:^(MXEventTimeline *liveTimeline) {
+        [self.mxRoom liveTimeline:^(id<MXEventTimeline> liveTimeline) {
             MXStrongifyAndReturnIfNil(self);
 
             [liveTimeline removeListener:self->membersListener];
@@ -245,12 +244,11 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"RoomParticipants"];
     
     // Refresh display
     [self refreshTableView];
+    
+    [self.screenTracker trackScreen];
 }
 
 - (void)viewDidAppear:(BOOL)animated
@@ -261,12 +259,6 @@
     {
         [memberDetailsViewController destroy];
         memberDetailsViewController = nil;
-    }
-
-    if (contactsPickerViewController)
-    {
-        [contactsPickerViewController destroy];
-        contactsPickerViewController = nil;
     }
 }
 
@@ -328,7 +320,7 @@
             if (self->membersListener)
             {
                 MXWeakify(self);
-                [self.mxRoom liveTimeline:^(MXEventTimeline *liveTimeline) {
+                [self.mxRoom liveTimeline:^(id<MXEventTimeline> liveTimeline) {
                     MXStrongifyAndReturnIfNil(self);
 
                     [liveTimeline removeListener:self->membersListener];
@@ -394,7 +386,7 @@
             NSArray *mxMembersEvents = @[kMXEventTypeStringRoomMember, kMXEventTypeStringRoomThirdPartyInvite, kMXEventTypeStringRoomPowerLevels];
 
             MXWeakify(self);
-            [self.mxRoom liveTimeline:^(MXEventTimeline *liveTimeline) {
+            [self.mxRoom liveTimeline:^(id<MXEventTimeline> liveTimeline) {
                 MXStrongifyAndReturnIfNil(self);
 
                 self->membersListener = [liveTimeline listenToEventsOfTypes:mxMembersEvents onEvent:^(MXEvent *event, MXTimelineDirection direction, id customObject) {
@@ -542,50 +534,9 @@
 
 - (void)onAddParticipantButtonPressed
 {
-    // Push the contacts picker.
-    contactsPickerViewController = [ContactsTableViewController contactsTableViewController];
-    
-    // Set delegate to handle action on member (start chat, mention)
-    contactsPickerViewController.contactsTableViewControllerDelegate = self;
-    
-    // Prepare its data source
-    ContactsDataSource *contactsDataSource = [[ContactsDataSource alloc] initWithMatrixSession:self.mxRoom.mxSession];
-    contactsDataSource.areSectionsShrinkable = YES;
-    contactsDataSource.displaySearchInputInContactsList = YES;
-    contactsDataSource.forceMatrixIdInDisplayName = YES;
-    // Add a plus icon to the contact cell in the contacts picker, in order to make it more understandable for the end user.
-    contactsDataSource.contactCellAccessoryImage = [[UIImage imageNamed:@"plus_icon"] vc_tintedImageUsingColor:ThemeService.shared.theme.textPrimaryColor];
-    
-    // List all the participants matrix user id to ignore them during the contacts search.
-    for (Contact *contact in actualParticipants)
-    {
-        contactsDataSource.ignoredContactsByMatrixId[contact.mxMember.userId] = contact;
-    }
-    for (Contact *contact in invitedParticipants)
-    {
-        if (contact.mxMember)
-        {
-            contactsDataSource.ignoredContactsByMatrixId[contact.mxMember.userId] = contact;
-        }
-    }
-    if (userParticipant)
-    {
-        contactsDataSource.ignoredContactsByMatrixId[userParticipant.mxMember.userId] = userParticipant;
-    }
-    
-    [contactsPickerViewController showSearch:YES];
-    contactsPickerViewController.searchBar.placeholder = [VectorL10n roomParticipantsInviteAnotherUser];
-    
-    // Apply the search pattern if any
-    if (currentSearchText)
-    {
-        contactsPickerViewController.searchBar.text = currentSearchText;
-        [contactsDataSource searchWithPattern:currentSearchText forceReset:YES];
-    }
-    
-    [contactsPickerViewController displayList:contactsDataSource];
-    
-    [self pushViewController:contactsPickerViewController];
+    self->invitePresenter = [[RoomParticipantsInviteCoordinatorBridgePresenter alloc] initWithSession:self.mxRoom.mxSession room:self.mxRoom parentSpaceId:self.parentSpaceId currentSearchText:currentSearchText actualParticipants:actualParticipants invitedParticipants:invitedParticipants userParticipant:userParticipant];
+    self->invitePresenter.delegate = self;
+    [self->invitePresenter presentFrom:self animated:true];
 }
 
 - (void)refreshParticipantsFromRoomMembers
@@ -765,8 +716,8 @@
         {
             // Order first by power levels (admins then moderators then others)
             MXRoomPowerLevels *powerLevels = [roomState powerLevels];
-            NSInteger powerLevelA = [powerLevels powerLevelOfUserWithUserID:contactA.mxMember.userId];
-            NSInteger powerLevelB = [powerLevels powerLevelOfUserWithUserID:contactB.mxMember.userId];
+            NSInteger powerLevelA = [roomState powerLevelOfUserWithUserID:contactA.mxMember.userId];
+            NSInteger powerLevelB = [roomState powerLevelOfUserWithUserID:contactB.mxMember.userId];
             
             if (powerLevelA == powerLevelB)
             {
@@ -845,7 +796,7 @@
     pendingMaskSpinnerView.alpha = 0;
     [UIView animateWithDuration:0.3 delay:0.3 options:UIViewAnimationOptionBeginFromCurrentState animations:^{
         
-        pendingMaskSpinnerView.alpha = 1;
+        self->pendingMaskSpinnerView.alpha = 1;
         
     } completion:^(BOOL finished) {
     }];
@@ -866,15 +817,15 @@
     if (self.parentViewController.navigationController)
     {
         // Hide back button title
-        self.parentViewController.navigationItem.backBarButtonItem =[[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-        
+        [self.parentViewController vc_removeBackTitle];
+
         [self.parentViewController.navigationController pushViewController:viewController animated:YES];
     }
     else
     {
         // Hide back button title
-        self.navigationItem.backBarButtonItem =[[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-        
+        [self vc_removeBackTitle];
+
         [self.navigationController pushViewController:viewController animated:YES];
     }
 }
@@ -1030,13 +981,16 @@
                 
                 // Update member power level
                 MXRoomPowerLevels *powerLevels = [roomState powerLevels];
-                NSInteger powerLevel = [powerLevels powerLevelOfUserWithUserID:contact.mxMember.userId];
+                NSInteger powerLevel = [roomState powerLevelOfUserWithUserID:contact.mxMember.userId];
                 
                 RoomPowerLevel roomPowerLevel = [RoomPowerLevelHelper roomPowerLevelFrom:powerLevel];
                 
                 NSString *powerLevelText;
                 
                 switch (roomPowerLevel) {
+                    case RoomPowerLevelOwner:
+                        powerLevelText = [VectorL10n roomMemberPowerLevelShortOwner];
+                        break;
                     case RoomPowerLevelAdmin:
                         powerLevelText = [VectorL10n roomMemberPowerLevelShortAdmin];
                         break;
@@ -1242,7 +1196,7 @@
 
 - (void)roomMemberDetailsViewController:(MXKRoomMemberDetailsViewController *)roomMemberDetailsViewController startChatWithMemberId:(NSString *)matrixId completion:(void (^)(void))completion
 {
-    [[AppDelegate theDelegate] createDirectChatWithUserId:matrixId completion:completion];
+    [[AppDelegate theDelegate] showNewDirectChat:matrixId withMatrixSession:self.mxRoom.mxSession completion:completion];
 }
 
 - (void)roomMemberDetailsViewController:(MXKRoomMemberDetailsViewController *)roomMemberDetailsViewController mention:(MXRoomMember*)member
@@ -1258,13 +1212,6 @@
             
         }];
     }
-}
-
-#pragma mark - ContactsTableViewControllerDelegate
-
-- (void)contactsTableViewController:(ContactsTableViewController *)contactsTableViewController didSelectContact:(MXKContact*)contact
-{
-    [self didSelectInvitableContact:contact];
 }
 
 #pragma mark - Actions
@@ -1284,62 +1231,7 @@
         
         if (section == participantsSection && userParticipant && (0 == row) && !currentSearchText.length)
         {
-            // Leave ?
-            MXWeakify(self);
-            
-            NSString *title, *message;
-            if (self.mxRoom.isDirect)
-            {
-                title = [VectorL10n roomParticipantsLeavePromptTitleForDm];
-                message = [VectorL10n roomParticipantsLeavePromptMsgForDm];
-            }
-            else
-            {
-                title = [VectorL10n roomParticipantsLeavePromptTitle];
-                message = [VectorL10n roomParticipantsLeavePromptMsg];
-            }
-            
-            currentAlert = [UIAlertController alertControllerWithTitle:title
-                                                               message:message
-                                                        preferredStyle:UIAlertControllerStyleAlert];
-            
-            [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
-                                                             style:UIAlertActionStyleCancel
-                                                           handler:^(UIAlertAction * action) {
-                                                               
-                                                               MXStrongifyAndReturnIfNil(self);
-                                                               self->currentAlert = nil;
-                                                               
-                                                           }]];
-            
-            [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n leave]
-                                                             style:UIAlertActionStyleDefault
-                                                           handler:^(UIAlertAction * action) {
-                                                               
-                                                               MXStrongifyAndReturnIfNil(self);
-                                                               self->currentAlert = nil;
-                                                               
-                                                               [self addPendingActionMask];
-                                                               MXWeakify(self);
-                                                               [self.mxRoom leave:^{
-                                                                   
-                                                                   MXStrongifyAndReturnIfNil(self);
-                                                                   [self withdrawViewControllerAnimated:YES completion:nil];
-                                                                   
-                                                               } failure:^(NSError *error) {
-                                                                   
-                                                                   MXStrongifyAndReturnIfNil(self);
-                                                                   [self removePendingActionMask];
-                                                                   MXLogDebug(@"[RoomParticipantsVC] Leave room %@ failed", self.mxRoom.roomId);
-                                                                   // Alert user
-                                                                   [[AppDelegate theDelegate] showErrorAsAlert:error];
-                                                                   
-                                                               }];
-                                                               
-                                                           }]];
-            
-            [currentAlert mxk_setAccessibilityIdentifier:@"RoomParticipantsVCLeaveAlert"];
-            [self presentViewController:currentAlert animated:YES completion:nil];
+            [self leaveRoom];
         }
         else
         {
@@ -1388,7 +1280,7 @@
                                                                        message:promptMsg
                                                                 preferredStyle:UIAlertControllerStyleAlert];
                     
-                    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+                    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                                      style:UIAlertActionStyleCancel
                                                                    handler:^(UIAlertAction * action) {
                                                                        
@@ -1437,7 +1329,7 @@
                                                                        message:[VectorL10n roomParticipantsRemoveThirdPartyInvitePromptMsg]
                                                                 preferredStyle:UIAlertControllerStyleAlert];
                     
-                    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+                    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                                      style:UIAlertActionStyleCancel
                                                                    handler:^(UIAlertAction * action) {
                                                                        
@@ -1486,152 +1378,93 @@
     }
 }
 
-- (void)onCancel:(id)sender
-{
-    [self withdrawViewControllerAnimated:YES completion:nil];
-}
-
-#pragma mark -
-
-- (void)didSelectInvitableContact:(MXKContact*)contact
-{
-    __weak typeof(self) weakSelf = self;
+- (void)leaveRoom {
+    MXWeakify(self);
     
-    if (currentAlert)
-    {
-        [currentAlert dismissViewControllerAnimated:NO completion:nil];
-        currentAlert = nil;
-    }
-    
-    // Invite ?
-    NSString *promptMsg = [VectorL10n roomParticipantsInvitePromptMsg:contact.displayName];
-    currentAlert = [UIAlertController alertControllerWithTitle:[VectorL10n roomParticipantsInvitePromptTitle]
-                                                       message:promptMsg
-                                                preferredStyle:UIAlertControllerStyleAlert];
-    
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
-                                                     style:UIAlertActionStyleCancel
-                                                   handler:^(UIAlertAction * action) {
-                                                       
-                                                       if (weakSelf)
-                                                       {
-                                                           typeof(self) self = weakSelf;
-                                                           self->currentAlert = nil;
-                                                       }
-                                                       
-                                                   }]];
-    
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n invite]
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction * action) {
-                                                       
-                                                       if (weakSelf)
-                                                       {
-                                                           typeof(self) self = weakSelf;
-                                                           self->currentAlert = nil;
-                                                           
-                                                           NSArray *identifiers = contact.matrixIdentifiers;
-                                                           NSString *participantId;
-                                                           
-                                                           if (identifiers.count)
-                                                           {
-                                                               participantId = identifiers.firstObject;
+    [self.mxRoom isLastOwnerWithCompletionHandler:^(BOOL isLastOwner, NSError* error) {
+        if (isLastOwner)
+        {
+            MXStrongifyAndReturnIfNil(self);
+            self->currentAlert = [UIAlertController alertControllerWithTitle:[VectorL10n error]
+                                                               message:[VectorL10n roomParticipantsLeaveNotAllowedForLastOwnerMsg]
+                                                        preferredStyle:UIAlertControllerStyleAlert];
+            
+            [self->currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
+                                                             style:UIAlertActionStyleCancel
+                                                           handler:^(UIAlertAction * action) {
                                                                
-                                                               // Invite this user if a room is defined
+                                                               MXStrongifyAndReturnIfNil(self);
+                                                               self->currentAlert = nil;
+                                                           }]];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self presentViewController:self->currentAlert animated:YES completion:nil];
+            });
+        }
+        else
+        {
+            // Leave ?
+            MXStrongifyAndReturnIfNil(self);
+            NSString *title, *message;
+            if (self.mxRoom.isDirect)
+            {
+                title = [VectorL10n roomParticipantsLeavePromptTitleForDm];
+                message = [VectorL10n roomParticipantsLeavePromptMsgForDm];
+            }
+            else
+            {
+                title = [VectorL10n roomParticipantsLeavePromptTitle];
+                message = [VectorL10n roomParticipantsLeavePromptMsg];
+            }
+            
+            self->currentAlert = [UIAlertController alertControllerWithTitle:title
+                                                               message:message
+                                                        preferredStyle:UIAlertControllerStyleAlert];
+            
+            MXWeakify(self);
+            [self->currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
+                                                             style:UIAlertActionStyleCancel
+                                                           handler:^(UIAlertAction * action) {
+                                                               
+                                                               MXStrongifyAndReturnIfNil(self);
+                                                               self->currentAlert = nil;
+                                                               
+                                                           }]];
+            
+            [self->currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n leave]
+                                                             style:UIAlertActionStyleDefault
+                                                           handler:^(UIAlertAction * action) {
+                                                               
+                                                               MXStrongifyAndReturnIfNil(self);
+                                                               self->currentAlert = nil;
+                                                               
                                                                [self addPendingActionMask];
-                                                               [self.mxRoom inviteUser:participantId success:^{
+                                                               MXWeakify(self);
+                                                               [self.mxRoom leave:^{
                                                                    
-                                                                   __strong __typeof(weakSelf)self = weakSelf;
-                                                                   [self removePendingActionMask];
-                                                                   
-                                                                   // Refresh display by removing the contacts picker
-                                                                   [self->contactsPickerViewController withdrawViewControllerAnimated:YES completion:nil];
+                                                                   MXStrongifyAndReturnIfNil(self);
+                                                                   [self withdrawViewControllerAnimated:YES completion:nil];
                                                                    
                                                                } failure:^(NSError *error) {
                                                                    
-                                                                   __strong __typeof(weakSelf)self = weakSelf;
+                                                                   MXStrongifyAndReturnIfNil(self);
                                                                    [self removePendingActionMask];
-                                                                   
-                                                                   MXLogDebug(@"[RoomParticipantsVC] Invite %@ failed", participantId);
+                                                                   MXLogDebug(@"[RoomParticipantsVC] Leave room %@ failed", self.mxRoom.roomId);
                                                                    // Alert user
                                                                    [[AppDelegate theDelegate] showErrorAsAlert:error];
+                                                                   
                                                                }];
-                                                           }
-                                                           else
-                                                           {
-                                                               if (contact.emailAddresses.count)
-                                                               {
-                                                                   // This is a local contact, consider the first email by default.
-                                                                   // TODO: Prompt the user to select the right email.
-                                                                   MXKEmail *email = contact.emailAddresses.firstObject;
-                                                                   participantId = email.emailAddress;
-                                                               }
-                                                               else
-                                                               {
-                                                                   // This is the text filled by the user.
-                                                                   participantId = contact.displayName;
-                                                               }
                                                                
-                                                               // Is it an email or a Matrix user ID?
-                                                               if ([MXTools isEmailAddress:participantId])
-                                                               {
-                                                                   [self addPendingActionMask];
-                                                                   [self.mxRoom inviteUserByEmail:participantId success:^{
-                                                                       
-                                                                       __strong __typeof(weakSelf)self = weakSelf;
-                                                                       [self removePendingActionMask];
-                                                                       
-                                                                       // Refresh display by removing the contacts picker
-                                                                       [self->contactsPickerViewController withdrawViewControllerAnimated:YES completion:nil];
-                                                                       
-                                                                   } failure:^(NSError *error) {
-                                                                       
-                                                                       __strong __typeof(weakSelf)self = weakSelf;
-                                                                       [self removePendingActionMask];
-                                                                       
-                                                                       MXLogDebug(@"[RoomParticipantsVC] Invite be email %@ failed", participantId);
+                                                           }]];
+            
+            [self->currentAlert mxk_setAccessibilityIdentifier:@"RoomParticipantsVCLeaveAlert"];
+            [self presentViewController:self->currentAlert animated:YES completion:nil];
+        }
+    }];
+}
 
-                                                                       // Alert user
-                                                                       if ([error.domain isEqualToString:kMXRestClientErrorDomain]
-                                                                           && error.code == MXRestClientErrorMissingIdentityServer)
-                                                                       {
-                                                                           NSString *message = [VectorL10n errorInvite3pidWithNoIdentityServer];
-                                                                           [[AppDelegate theDelegate] showAlertWithTitle:message message:nil];
-                                                                       }
-                                                                       else
-                                                                       {
-                                                                           [[AppDelegate theDelegate] showErrorAsAlert:error];
-                                                                       }
-                                                                   }];
-                                                               }
-                                                               else //if ([MXTools isMatrixUserIdentifier:participantId])
-                                                               {
-                                                                   [self addPendingActionMask];
-                                                                   [self.mxRoom inviteUser:participantId success:^{
-                                                                       
-                                                                       __strong __typeof(weakSelf)self = weakSelf;
-                                                                       [self removePendingActionMask];
-                                                                       
-                                                                       // Refresh display by removing the contacts picker
-                                                                       [self->contactsPickerViewController withdrawViewControllerAnimated:YES completion:nil];
-                                                                       
-                                                                   } failure:^(NSError *error) {
-                                                                       
-                                                                       __strong __typeof(weakSelf)self = weakSelf;
-                                                                       [self removePendingActionMask];
-                                                                       
-                                                                       MXLogDebug(@"[RoomParticipantsVC] Invite %@ failed", participantId);
-                                                                       // Alert user
-                                                                       [[AppDelegate theDelegate] showErrorAsAlert:error];
-                                                                   }];
-                                                               }
-                                                           }
-                                                       }
-                                                       
-                                                   }]];
-    
-    [currentAlert mxk_setAccessibilityIdentifier:@"RoomParticipantsVCInviteAlert"];
-    [self presentViewController:currentAlert animated:YES completion:nil];
+- (void)onCancel:(id)sender
+{
+    [self withdrawViewControllerAnimated:YES completion:nil];
 }
 
 #pragma mark - UISearchBar delegate
@@ -1651,7 +1484,6 @@
     // Magnifying glass icon.
     UIImageView *leftImageView = (UIImageView *)searchBarTextField.leftView;
     leftImageView.image = [leftImageView.image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    leftImageView.tintColor = ThemeService.shared.theme.tintColor;
     
     // remove the gray background color
     UIView *effectBackgroundTop =  [searchBarTextField valueForKey:@"_effectBackgroundTop"];
@@ -1761,6 +1593,23 @@
     searchBar.text = nil;
     // Leave search
     [searchBar resignFirstResponder];
+}
+
+#pragma mark - RoomParticipantsInviteCoordinatorBridgePresenterDelegate
+
+- (void)roomParticipantsInviteCoordinatorBridgePresenterDidComplete:(RoomParticipantsInviteCoordinatorBridgePresenter *)coordinatorBridgePresenter
+{
+    self->invitePresenter = nil;
+}
+
+- (void)roomParticipantsInviteCoordinatorBridgePresenterDidStartLoading:(RoomParticipantsInviteCoordinatorBridgePresenter *)coordinatorBridgePresenter
+{
+    [self addPendingActionMask];
+}
+
+- (void)roomParticipantsInviteCoordinatorBridgePresenterDidEndLoading:(RoomParticipantsInviteCoordinatorBridgePresenter *)coordinatorBridgePresenter
+{
+    [self removePendingActionMask];
 }
 
 @end

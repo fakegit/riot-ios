@@ -1,17 +1,9 @@
 /*
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "UnifiedSearchRecentsDataSource.h"
@@ -22,12 +14,10 @@
 #import "DirectoryRecentTableViewCell.h"
 
 #import "MXRoom+Riot.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 @interface UnifiedSearchRecentsDataSource()
 {
-    NSInteger searchedRoomIdOrAliasSection; // used to display the potential room id or alias typed during search.
-    
     // The potential room id or alias typed in search input.
     NSString *roomIdOrAlias;
 }
@@ -35,16 +25,39 @@
 
 @implementation UnifiedSearchRecentsDataSource
 
-- (instancetype)init
+- (instancetype)initWithMatrixSession:(MXSession *)mxSession recentsListService:(id<RecentsListServiceProtocol>)recentsListService
 {
-    self = [super init];
+    self = [super initWithMatrixSession:mxSession recentsListService:recentsListService];
     if (self)
     {
-        searchedRoomIdOrAliasSection = -1;
-        
         _hideRecents = NO;
     }
     return self;
+}
+
+#pragma mark - Sections
+
+- (RecentsDataSourceSections *)makeDataSourceSections
+{
+    NSMutableArray *types = [NSMutableArray array];
+    if (roomIdOrAlias.length)
+    {
+        // The current search pattern corresponds to a valid room id or room alias
+        [types addObject:@(RecentsDataSourceSectionTypeSearchedRoom)];
+    }
+    
+    // The public rooms directory cell is then visible whatever the search activity.
+    if (RiotSettings.shared.unifiedSearchScreenShowPublicDirectory)
+    {
+        [types addObject:@(RecentsDataSourceSectionTypeDirectory)];
+    }
+    
+    if (!_hideRecents) {
+        NSArray *existingTypes = [[super makeDataSourceSections] sectionTypes];
+        [types addObjectsFromArray:existingTypes];
+    }
+    
+    return [[RecentsDataSourceSections alloc] initWithSectionTypes:types.copy];
 }
 
 #pragma mark -
@@ -69,74 +82,16 @@
 
 #pragma mark - UITableViewDataSource
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
-{
-    NSInteger sectionsCount = 0;
-    
-    // Check whether all data sources are ready before rendering recents
-    if (self.state == MXKDataSourceStateReady)
-    {
-        sectionsCount = [super numberOfSectionsInTableView:tableView];
-        NSInteger sectionsOffset = 0;
-        
-        if (roomIdOrAlias.length)
-        {
-            // The current search pattern corresponds to a valid room id or room alias
-            searchedRoomIdOrAliasSection = sectionsOffset++;
-        }
-        
-        // The public rooms directory cell is then visible whatever the search activity.
-        if (RiotSettings.shared.unifiedSearchScreenShowPublicDirectory)
-        {
-            self.directorySection = sectionsOffset++;
-        }
-        
-        if (_hideRecents)
-        {
-            self.invitesSection = self.favoritesSection = self.peopleSection = self.conversationSection = self.lowPrioritySection = self.serverNoticeSection = -1;
-            sectionsCount = sectionsOffset;
-        }
-        else
-        {
-            if (self.invitesSection != -1)
-            {
-                self.invitesSection += sectionsOffset;
-            }
-            if (self.favoritesSection != -1)
-            {
-                self.favoritesSection += sectionsOffset;
-            }
-            if (self.peopleSection != -1)
-            {
-                self.peopleSection += sectionsOffset;
-            }
-            if (self.conversationSection != -1)
-            {
-                self.conversationSection += sectionsOffset;
-            }
-            if (self.lowPrioritySection != -1)
-            {
-                self.lowPrioritySection += sectionsOffset;
-            }
-            if (self.serverNoticeSection != -1)
-            {
-                self.serverNoticeSection += sectionsOffset;
-            }
-            sectionsCount += sectionsOffset;
-        }
-    }
-    return sectionsCount;
-}
-
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     NSUInteger count = 0;
 
-    if (section == searchedRoomIdOrAliasSection)
+    RecentsDataSourceSectionType sectionType = [self.sections sectionTypeForSectionIndex:section];
+    if (sectionType == RecentsDataSourceSectionTypeSearchedRoom)
     {
         count = 1;
     }
-    else if (section == self.directorySection)
+    else if (sectionType == RecentsDataSourceSectionTypeDirectory)
     {
         count = 1;
     }
@@ -148,13 +103,13 @@
     return count;
 }
 
-- (UIView *)viewForHeaderInSection:(NSInteger)section withFrame:(CGRect)frame
+- (UIView *)viewForHeaderInSection:(NSInteger)section withFrame:(CGRect)frame inTableView:(UITableView*)tableView
 {
     UIView *sectionHeader = nil;
     
-    if (section != searchedRoomIdOrAliasSection)
+    if ([self.sections sectionTypeForSectionIndex:section] != RecentsDataSourceSectionTypeSearchedRoom)
     {
-        sectionHeader = [super viewForHeaderInSection:section withFrame:frame];
+        sectionHeader = [super viewForHeaderInSection:section withFrame:frame inTableView:tableView];
     }
     
     return sectionHeader;
@@ -162,7 +117,8 @@
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    if (indexPath.section == searchedRoomIdOrAliasSection)
+    RecentsDataSourceSectionType sectionType = [self.sections sectionTypeForSectionIndex:indexPath.section];
+    if (sectionType == RecentsDataSourceSectionTypeSearchedRoom)
     {
         RoomIdOrAliasTableViewCell *roomIdOrAliasCell = [tableView dequeueReusableCellWithIdentifier:RoomIdOrAliasTableViewCell.defaultReuseIdentifier];
         if (!roomIdOrAliasCell)
@@ -174,7 +130,7 @@
         
         return roomIdOrAliasCell;
     }
-    else if (indexPath.section == self.directorySection)
+    else if (sectionType == RecentsDataSourceSectionTypeDirectory)
     {
         // For the cell showing the public rooms directory search result,
         // skip the MatrixKit mechanism and return directly the UITableViewCell
@@ -194,12 +150,13 @@
 
 - (CGFloat)cellHeightAtIndexPath:(NSIndexPath *)indexPath
 {
-    if (indexPath.section == searchedRoomIdOrAliasSection)
+    RecentsDataSourceSectionType sessionType = [self.sections sectionTypeForSectionIndex:indexPath.section];
+    if (sessionType == RecentsDataSourceSectionTypeSearchedRoom)
     {
         return RoomIdOrAliasTableViewCell.cellHeight;
     }
     
-    if (indexPath.section == self.directorySection)
+    if (sessionType == RecentsDataSourceSectionTypeDirectory)
     {
         // For the cell showing the public rooms directory search result,
         // skip the MatrixKit mechanism and return directly the cell height

@@ -1,20 +1,12 @@
 /*
- Copyright 2015 OpenMarket Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
-#import <MatrixKit/MatrixKit.h>
+#import "MatrixKit.h"
 
 @class CircleProgressView;
 
@@ -33,16 +25,18 @@ extern NSString *const kMXKRoomBubbleCellRiotEditButtonPressed;
 extern NSString *const kMXKRoomBubbleCellTapOnReceiptsContainer;
 
 /**
+ Action identifier used when the user tapped on the add reaction button.
+ 
+ The 'userInfo' dictionary contains a 'NSString' object under the 'kMXKRoomBubbleCellEventIdKey' key, representing the event id of the event associated with the reactions.
+ */
+extern NSString *const kMXKRoomBubbleCellTapOnAddReaction;
+
+/**
  Action identifier used when the user perform a long press on reactions view.
  
  The 'userInfo' dictionary contains a 'NSString' object under the 'kMXKRoomBubbleCellEventIdKey' key, representing the event id of the event associated with the reactions.
  */
 extern NSString *const kMXKRoomBubbleCellLongPressOnReactionView;
-
-/**
- 'userInfo' dictionary key 'kMXKRoomBubbleCellEventIdKey' is associated to a 'NSString' object representing an event id.
- */
-extern NSString *const kMXKRoomBubbleCellEventIdKey;
 
 /**
  Action identifier used when the user pressed accept button for an incoming key verification request.
@@ -71,6 +65,17 @@ extern NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePr
  @param componentIndex index of the component in bubble message data
  */
 - (void)addTimestampLabelForComponent:(NSUInteger)componentIndex;
+
+/**
+ Add timestamp label for a component in receiver.
+ 
+ Note: The label added here is automatically removed when [didEndDisplay] is called.
+ 
+ @param componentIndex index of the component in bubble message data
+ @param displayOnLeft Indicate true to display label on left and false to display on right
+ */
+- (void)addTimestampLabelForComponent:(NSUInteger)componentIndex
+                        displayOnLeft:(BOOL)displayOnLeft;
 
 /**
  Highlight a component in receiver.

@@ -1,23 +1,13 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
 
 final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceType {
-    
     typealias Completion = () -> Void
     
     // MARK: - Properties
@@ -30,6 +20,10 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
     private var notificationCenterDidFailObserver: NSObjectProtocol?
     
     private var observers: [ObjectIdentifier] = []
+    
+    private var notificationCenter: MXNotificationCenter? {
+        room.mxSession?.notificationCenter
+    }
     
     // MARK: Public
     
@@ -50,11 +44,11 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
     // MARK: - Public
     
     func observeNotificationState(listener: @escaping RoomNotificationStateCallback) {
-        
         let observer = NotificationCenter.default.addObserver(
             forName: NSNotification.Name(rawValue: kMXNotificationCenterDidUpdateRules),
             object: nil,
-            queue: OperationQueue.main) { [weak self] _ in
+            queue: OperationQueue.main
+        ) { [weak self] _ in
             guard let self = self else { return }
             listener(self.room.notificationState)
         }
@@ -88,7 +82,7 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
         }
         
         guard let rule = room.overridePushRule else {
-            self.addPushRuleToMute(completion: completion)
+            addPushRuleToMute(completion: completion)
             return
         }
         
@@ -96,10 +90,10 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
             MXLog.debug("[RoomNotificationSettingsService] Request in progress: ignore push rule update")
             completion()
             return
-          }
+        }
         
         // if the user defined one, use it
-        if rule.actionsContains(actionType: MXPushRuleActionTypeDontNotify) {
+        if rule.dontNotify {
             enablePushRule(rule: rule, completion: completion)
         } else {
             removePushRule(rule: rule) {
@@ -130,21 +124,20 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
             MXLog.debug("[MXRoom+Riot] Request in progress: ignore push rule update")
             completion()
             return
-          }
+        }
         
         // if the user defined one, use it
-        if rule.actionsContains(actionType: MXPushRuleActionTypeDontNotify) {
+        if rule.dontNotify {
             enablePushRule(rule: rule, completion: completion)
         } else {
             removePushRule(rule: rule) {
                 self.addPushRuleToMentionOnly(completion: completion)
             }
         }
-        
     }
     
     private func allMessages(completion: @escaping Completion) {
-        if !room.isMentionsOnly && !room.isMuted {
+        if !room.isMentionsOnly, !room.isMuted {
             completion()
             return
         }
@@ -168,11 +161,12 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
         }
         handleFailureCallback(completion)
         
-        room.mxSession.notificationCenter.addRoomRule(
+        notificationCenter?.addRoomRule(
             room.roomId,
             notify: false,
             sound: false,
-            highlight: false)
+            highlight: false
+        )
     }
     
     private func addPushRuleToMute(completion: @escaping Completion) {
@@ -185,7 +179,7 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
         }
         handleFailureCallback(completion)
         
-        room.mxSession.notificationCenter.addOverrideRule(
+        notificationCenter?.addOverrideRule(
             withId: roomId,
             conditions: [["kind": "event_match", "key": "room_id", "pattern": roomId]],
             notify: false,
@@ -197,28 +191,29 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
     private func removePushRule(rule: MXPushRule, completion: @escaping Completion) {
         handleUpdateCallback(completion) { [weak self] in
             guard let self = self else { return true }
-            return self.room.mxSession.notificationCenter.rule(byId: rule.ruleId) == nil
+            return self.notificationCenter?.rule(byId: rule.ruleId) == nil
         }
         handleFailureCallback(completion)
         
-        room.mxSession.notificationCenter.removeRule(rule)
+        notificationCenter?.removeRule(rule)
     }
     
     private func enablePushRule(rule: MXPushRule, completion: @escaping Completion) {
         handleUpdateCallback(completion) {
             // No way to check whether this notification concerns the push rule. Consider the change is applied.
-            return true
+            true
         }
         handleFailureCallback(completion)
         
-        room.mxSession.notificationCenter.enableRule(rule, isEnabled: true)
+        notificationCenter?.enableRule(rule, isEnabled: true)
     }
     
-    private func handleUpdateCallback(_ completion:  @escaping Completion, releaseCheck: @escaping () -> Bool) {
+    private func handleUpdateCallback(_ completion: @escaping Completion, releaseCheck: @escaping () -> Bool) {
         notificationCenterDidUpdateObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name(rawValue: kMXNotificationCenterDidUpdateRules),
             object: nil,
-            queue: OperationQueue.main) { [weak self] _ in
+            queue: OperationQueue.main
+        ) { [weak self] _ in
             guard let self = self else { return }
             if releaseCheck() {
                 self.removeObservers()
@@ -231,7 +226,8 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
         notificationCenterDidFailObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name(rawValue: kMXNotificationCenterDidFailRulesUpdate),
             object: nil,
-            queue: OperationQueue.main) { [weak self] _ in
+            queue: OperationQueue.main
+        ) { [weak self] _ in
             guard let self = self else { return }
             self.removeObservers()
             completion()
@@ -239,21 +235,39 @@ final class MXRoomNotificationSettingsService: RoomNotificationSettingsServiceTy
     }
     
     func removeObservers() {
-        if let observer = self.notificationCenterDidUpdateObserver {
+        if let observer = notificationCenterDidUpdateObserver {
             NotificationCenter.default.removeObserver(observer)
-            self.notificationCenterDidUpdateObserver = nil
+            notificationCenterDidUpdateObserver = nil
         }
         
-        if let observer = self.notificationCenterDidFailObserver {
+        if let observer = notificationCenterDidFailObserver {
             NotificationCenter.default.removeObserver(observer)
-            self.notificationCenterDidFailObserver = nil
+            notificationCenterDidFailObserver = nil
         }
     }
 }
 
-// We could move these to their own file and make available in global namespace or move to sdk but they are only used here at the moment
-fileprivate extension MXRoom {
+public extension MXRoom {
+    var isMuted: Bool {
+        // Check whether an override rule has been defined with the roomm id as rule id.
+        // This kind of rule is created to mute the room
+        guard let rule = overridePushRule,
+              rule.dontNotify,
+              rule.conditionIsEnabled(kind: .eventMatch, for: roomId) else {
+            return false
+        }
+        return rule.enabled
+    }
     
+    var isMentionsOnly: Bool {
+        // Check push rules at room level
+        guard let rule = roomPushRule else { return false }
+        return rule.enabled && rule.dontNotify
+    }
+}
+
+// We could move these to their own file and make available in global namespace or move to sdk but they are only used here at the moment
+private extension MXRoom {
     typealias Completion = () -> Void
     func getRoomRule(from rules: [Any]) -> MXPushRule? {
         guard let pushRules = rules as? [MXPushRule] else {
@@ -264,21 +278,20 @@ fileprivate extension MXRoom {
     }
     
     var overridePushRule: MXPushRule? {
-        guard let overrideRules = mxSession.notificationCenter.rules.global.override else {
+        guard let overrideRules = mxSession?.notificationCenter?.rules?.global?.override else {
             return nil
-          }
+        }
         return getRoomRule(from: overrideRules)
     }
     
     var roomPushRule: MXPushRule? {
-        guard let roomRules = mxSession.notificationCenter.rules.global.room else {
+        guard let roomRules = mxSession?.notificationCenter?.rules?.global?.room else {
             return nil
-          }
+        }
         return getRoomRule(from: roomRules)
     }
     
     var notificationState: RoomNotificationState {
-        
         if isMuted {
             return .mute
         }
@@ -287,27 +300,9 @@ fileprivate extension MXRoom {
         }
         return .all
     }
-
-    var isMuted: Bool {
-        // Check whether an override rule has been defined with the roomm id as rule id.
-        // This kind of rule is created to mute the room
-        guard let rule = self.overridePushRule,
-              rule.actionsContains(actionType: MXPushRuleActionTypeDontNotify),
-              rule.conditionIsEnabled(kind: .eventMatch, for: roomId) else {
-            return false
-        }
-        return rule.enabled
-    }
-    
-    var isMentionsOnly: Bool {
-        // Check push rules at room level
-        guard let rule = roomPushRule else { return false }
-        return rule.enabled && rule.actionsContains(actionType: MXPushRuleActionTypeDontNotify)
-    }
-    
 }
 
-fileprivate extension MXPushRule {
+private extension MXPushRule {
     func actionsContains(actionType: MXPushRuleActionType) -> Bool {
         guard let actions = actions as? [MXPushRuleAction] else {
             return false
@@ -321,8 +316,8 @@ fileprivate extension MXPushRule {
         }
         let ruleContainsCondition = conditions.contains { condition in
             guard case kind = MXPushRuleConditionType(identifier: condition.kind),
-                let key = condition.parameters["key"] as? String,
-                let pattern = condition.parameters["pattern"] as? String
+                  let key = condition.parameters["key"] as? String,
+                  let pattern = condition.parameters["pattern"] as? String
             else { return false }
             return key == "room_id" && pattern == roomId
         }

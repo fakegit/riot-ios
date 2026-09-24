@@ -1,42 +1,57 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "MXKRoomBubbleTableViewCell+Riot.h"
 
-#import "RoomBubbleCellData.h"
-
-#import "ThemeService.h"
-#import "Riot-Swift.h"
-
 #import <objc/runtime.h>
+
+#import "RoomBubbleCellData.h"
+#import "ThemeService.h"
+
+#import "GeneratedInterface-Swift.h"
 
 #define VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_X 48
 #define VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_WIDTH 4
 
 NSString *const kMXKRoomBubbleCellRiotEditButtonPressed = @"kMXKRoomBubbleCellRiotEditButtonPressed";
 NSString *const kMXKRoomBubbleCellTapOnReceiptsContainer = @"kMXKRoomBubbleCellTapOnReceiptsContainer";
+NSString *const kMXKRoomBubbleCellTapOnAddReaction = @"kMXKRoomBubbleCellTapOnAddReaction";
 NSString *const kMXKRoomBubbleCellLongPressOnReactionView = @"kMXKRoomBubbleCellLongPressOnReactionView";
-NSString *const kMXKRoomBubbleCellEventIdKey = @"kMXKRoomBubbleCellEventIdKey";
 NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestAcceptPressed = @"kMXKRoomBubbleCellKeyVerificationAcceptPressed";
 NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed = @"kMXKRoomBubbleCellKeyVerificationDeclinePressed";
 
 @implementation MXKRoomBubbleTableViewCell (Riot)
 
 - (void)addTimestampLabelForComponent:(NSUInteger)componentIndex
+{
+    BOOL isFirstDisplayedComponent = (componentIndex == 0);
+    BOOL isLastMessageMostRecentComponent = NO;
+    
+    RoomBubbleCellData *roomBubbleCellData;
+    
+    if ([bubbleData isKindOfClass:RoomBubbleCellData.class])
+    {
+        roomBubbleCellData = (RoomBubbleCellData*)bubbleData;
+        isFirstDisplayedComponent = (componentIndex == roomBubbleCellData.oldestComponentIndex);
+        isLastMessageMostRecentComponent = roomBubbleCellData.containsLastMessage && (componentIndex == roomBubbleCellData.mostRecentComponentIndex);
+    }
+    
+    // Display timestamp on the left for selected component when it cannot overlap other UI elements like user's avatar
+    BOOL displayLabelOnLeft = roomBubbleCellData.displayTimestampForSelectedComponentOnLeftWhenPossible
+    && !isLastMessageMostRecentComponent
+    && (!isFirstDisplayedComponent || roomBubbleCellData.shouldHideSenderInformation);
+    
+    [self addTimestampLabelForComponent:componentIndex displayOnLeft:displayLabelOnLeft];
+}
+
+- (void)addTimestampLabelForComponent:(NSUInteger)componentIndex
+                        displayOnLeft:(BOOL)displayLabelOnLeft
 {
     MXKRoomBubbleComponent *component;
     
@@ -50,7 +65,6 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     if (component && component.date)
     {
         BOOL isFirstDisplayedComponent = (componentIndex == 0);
-        BOOL isLastMessageMostRecentComponent = NO;
         
         RoomBubbleCellData *roomBubbleCellData;
         
@@ -58,13 +72,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
         {
             roomBubbleCellData = (RoomBubbleCellData*)bubbleData;
             isFirstDisplayedComponent = (componentIndex == roomBubbleCellData.oldestComponentIndex);
-            isLastMessageMostRecentComponent = roomBubbleCellData.containsLastMessage && (componentIndex == roomBubbleCellData.mostRecentComponentIndex);
         }
-        
-        // Display timestamp on the left for selected component when it cannot overlap other UI elements like user's avatar
-        BOOL displayLabelOnLeft = roomBubbleCellData.displayTimestampForSelectedComponentOnLeftWhenPossible
-        && !isLastMessageMostRecentComponent
-        && ( !isFirstDisplayedComponent || roomBubbleCellData.shouldHideSenderInformation);
         
         [self addTimestampLabelForComponentIndex:componentIndex
                        isFirstDisplayedComponent:isFirstDisplayedComponent
@@ -91,7 +99,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     
     CGFloat timeLabelPosX;
     CGFloat timeLabelPosY;
-    CGFloat timeLabelHeight = RoomBubbleCellLayout.timestampLabelHeight;
+    CGFloat timeLabelHeight = PlainRoomCellLayoutConstants.timestampLabelHeight;
     CGFloat timeLabelWidth;
     NSTextAlignment timeLabelTextAlignment;
     
@@ -118,7 +126,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     }
     else
     {
-        timeLabelPosX = self.bubbleInfoContainer.frame.size.width - RoomBubbleCellLayout.timestampLabelWidth;
+        timeLabelPosX = self.bubbleInfoContainer.frame.size.width - PlainRoomCellLayoutConstants.timestampLabelWidth;
         
         if (isFirstDisplayedComponent)
         {
@@ -133,7 +141,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
             timeLabelPosY = component.position.y + self.msgTextViewTopConstraint.constant - timeLabelHeight - self.bubbleInfoContainerTopConstraint.constant;
         }
         
-        timeLabelWidth = RoomBubbleCellLayout.timestampLabelWidth;
+        timeLabelWidth = PlainRoomCellLayoutConstants.timestampLabelWidth;
         timeLabelTextAlignment = NSTextAlignmentRight;
     }
     
@@ -240,40 +248,18 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     
     if (componentIndex < bubbleComponents.count)
     {
-        MXKRoomBubbleComponent *component = bubbleComponents[componentIndex];
-
-        // Define the marker frame
-        CGFloat markPosY = component.position.y + self.msgTextViewTopConstraint.constant;
-        
-        NSInteger mostRecentComponentIndex = bubbleComponents.count - 1;
-        if ([bubbleData isKindOfClass:RoomBubbleCellData.class])
+        CGRect componentFrame = [self componentFrameInContentViewForIndex:componentIndex];
+        if (CGRectIsEmpty(componentFrame))
         {
-            mostRecentComponentIndex = ((RoomBubbleCellData*)bubbleData).mostRecentComponentIndex;
-        }
-        
-        // Compute the mark height.
-        // Use the rest of the cell height by default.
-        CGFloat markHeight = self.contentView.frame.size.height - markPosY;
-        if (componentIndex != mostRecentComponentIndex)
-        {
-            // There is another component (with display) after this component in the cell.
-            // Stop the marker height to the top of this component.
-            for (NSInteger index = componentIndex + 1; index < bubbleComponents.count; index ++)
-            {
-                MXKRoomBubbleComponent *nextComponent  = bubbleComponents[index];
-                
-                if (nextComponent.attributedTextMessage)
-                {
-                    markHeight = nextComponent.position.y - component.position.y;
-                    break;
-                }
-            }
+            return;
         }
 
-        UIView *markerView = [[UIView alloc] initWithFrame:CGRectMake(VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_X,
-                                                                markPosY,
-                                                                VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_WIDTH,
-                                                                markHeight)];
+        CGRect markerFrame = CGRectMake(VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_X,
+                                        CGRectGetMinY(componentFrame),
+                                        VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_WIDTH,
+                                        CGRectGetHeight(componentFrame));
+
+        UIView *markerView = [[UIView alloc] initWithFrame:markerFrame];
         markerView.backgroundColor = ThemeService.shared.theme.tintColor;
 
         [markerView setTranslatesAutoresizingMaskIntoConstraints:NO];
@@ -287,28 +273,28 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
                                                                              toItem:self.contentView
                                                                           attribute:NSLayoutAttributeLeading
                                                                          multiplier:1.0
-                                                                           constant:VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_X];
+                                                                           constant:CGRectGetMinX(markerFrame)];
         NSLayoutConstraint *topConstraint = [NSLayoutConstraint constraintWithItem:markerView
                                                                          attribute:NSLayoutAttributeTop
                                                                          relatedBy:NSLayoutRelationEqual
                                                                             toItem:self.contentView
                                                                          attribute:NSLayoutAttributeTop
                                                                         multiplier:1.0
-                                                                          constant:markPosY];
+                                                                          constant:CGRectGetMinY(markerFrame)];
         NSLayoutConstraint *widthConstraint = [NSLayoutConstraint constraintWithItem:markerView
                                                                            attribute:NSLayoutAttributeWidth
                                                                            relatedBy:NSLayoutRelationEqual
                                                                               toItem:nil
                                                                            attribute:NSLayoutAttributeNotAnAttribute
                                                                           multiplier:1.0
-                                                                            constant:VECTOR_ROOMBUBBLETABLEVIEWCELL_MARK_WIDTH];
+                                                                            constant:CGRectGetWidth(markerFrame)];
         NSLayoutConstraint *heightConstraint = [NSLayoutConstraint constraintWithItem:markerView
                                                                             attribute:NSLayoutAttributeHeight
                                                                             relatedBy:NSLayoutRelationEqual
                                                                                toItem:nil
                                                                             attribute:NSLayoutAttributeNotAnAttribute
                                                                            multiplier:1.0
-                                                                             constant:markHeight];
+                                                                             constant:CGRectGetHeight(markerFrame)];
 
         // Available on iOS 8 and later
         [NSLayoutConstraint activateConstraints:@[leftConstraint, topConstraint, widthConstraint, heightConstraint]];
@@ -325,7 +311,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     NSDate *date = bubbleData.date;
     if (date)
     {
-        UILabel *timeLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, self.bubbleInfoContainer.frame.size.width, RoomBubbleCellLayout.timestampLabelHeight)];
+        UILabel *timeLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, self.bubbleInfoContainer.frame.size.width, PlainRoomCellLayoutConstants.timestampLabelHeight)];
         
         timeLabel.text = [bubbleData.eventFormatter dateStringFromDate:date withTime:NO];
         timeLabel.textAlignment = NSTextAlignmentRight;
@@ -372,7 +358,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
                                                                                toItem:nil
                                                                             attribute:NSLayoutAttributeNotAnAttribute
                                                                            multiplier:1.0
-                                                                             constant:RoomBubbleCellLayout.timestampLabelHeight];
+                                                                             constant:PlainRoomCellLayoutConstants.timestampLabelHeight];
         
         // Available on iOS 8 and later
         [NSLayoutConstraint activateConstraints:@[rightConstraint, topConstraint, widthConstraint, heightConstraint]];
@@ -524,7 +510,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
         CGFloat componentBottomY = componentFrameInContentView.origin.y + componentFrameInContentView.size.height;
         
         CGFloat x = 0;
-        CGFloat y = componentFrameInContentView.origin.y - RoomBubbleCellLayout.timestampLabelHeight;
+        CGFloat y = componentFrameInContentView.origin.y - PlainRoomCellLayoutConstants.timestampLabelHeight;
         CGFloat width = roomBubbleTableViewCell.contentView.frame.size.width;
         CGFloat height = componentBottomY - y;
         
@@ -584,32 +570,47 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     }
     else if (roomBubbleTableViewCell.messageTextView)
     {
+        // Force the textView used underneath to layout its frame properly
+        [roomBubbleTableViewCell setNeedsLayout];
+        [roomBubbleTableViewCell layoutIfNeeded];
+                
+        // Compute the height
         CGFloat textMessageHeight = 0;
-        
         if ([bubbleCellData isKindOfClass:[RoomBubbleCellData class]])
         {
             RoomBubbleCellData *roomBubbleCellData = (RoomBubbleCellData*)bubbleCellData;
             
             if (!roomBubbleCellData.attachment && selectedComponent.attributedTextMessage)
             {
-                textMessageHeight = [roomBubbleCellData rawTextHeight:selectedComponent.attributedTextMessage];
+                // Get the width of messageTextView to compute the needed height
+                CGFloat maxTextWidth = CGRectGetWidth(roomBubbleTableViewCell.messageTextView.bounds);
+                
+                // Compute text message height
+                textMessageHeight = [roomBubbleCellData rawTextHeight:selectedComponent.attributedTextMessage withMaxWidth:maxTextWidth];
             }
         }
-        
-        selectedComponentPositionY = selectedComponent.position.y;
-        
+                
+        // Get the messageText frame in the cell content view (as the messageTextView may be inside a stackView and not directly a child of the tableViewCell)
+        UITextView *messageTextView = roomBubbleTableViewCell.messageTextView;
+        CGRect messageTextViewFrame = [messageTextView convertRect:messageTextView.bounds toView:roomBubbleTableViewCell.contentView];
+
         if (textMessageHeight > 0)
         {
             selectedComponentHeight = textMessageHeight;
         }
         else
         {
-            selectedComponentHeight = roomBubbleTableViewCell.frame.size.height - selectedComponentPositionY;
+            // if we don't have a height, use the messageTextView height without the text container vertical insets to stay aligned with the text.
+            selectedComponentHeight = CGRectGetHeight(messageTextViewFrame) - messageTextView.textContainerInset.top - messageTextView.textContainerInset.bottom;
         }
         
-        selectedComponenContentViewYOffset = roomBubbleTableViewCell.messageTextView.frame.origin.y;
+        // Get the vertical position of the messageTextView relative to the contentView
+        selectedComponenContentViewYOffset = CGRectGetMinY(messageTextViewFrame);
+
+        // Get the position of the component inside the messageTextView
+        selectedComponentPositionY = selectedComponent.position.y;
     }
-    
+        
     if (roomBubbleTableViewCell.attachmentView || roomBubbleTableViewCell.messageTextView)
     {
         CGFloat x = 0;
@@ -682,7 +683,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     if ([bubbleData isKindOfClass:RoomBubbleCellData.class]
         && ((RoomBubbleCellData*)bubbleData).componentIndexOfSentMessageTick >= 0)
     {
-        UIImage *image = [UIImage imageNamed:@"sent_message_tick"];
+        UIImage *image = AssetImages.sentMessageTick.image;
         image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
         tickView = [[UIImageView alloc] initWithImage:image];
         tickView.tintColor = ThemeService.shared.theme.textTertiaryColor;
@@ -718,7 +719,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
                 }
                 else
                 {
-                    UIImage *image = [UIImage imageNamed:@"sending_message_tick"];
+                    UIImage *image = AssetImages.sendingMessageTick.image;
                     image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
                     tickView = [[UIImageView alloc] initWithImage:image];
                     tickView.tintColor = ThemeService.shared.theme.textTertiaryColor;
@@ -731,7 +732,7 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
         
         if (component.event.sentState == MXEventSentStateFailed)
         {
-            tickView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"error_message_tick"]];
+            tickView = [[UIImageView alloc] initWithImage:AssetImages.errorMessageTick.image];
             [statusViews addObject:tickView];
             [self addTickView:tickView atIndex:index];
         }
@@ -781,9 +782,8 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
 
 - (void)addTickView:(UIView *)tickView atIndex:(NSInteger)index
 {
-    CGRect componentFrame = [self componentFrameInContentViewForIndex: index];
-
-    tickView.frame = CGRectMake(self.contentView.bounds.size.width - tickView.frame.size.width - 2 * RoomBubbleCellLayout.readReceiptsViewRightMargin, CGRectGetMaxY(componentFrame) - tickView.frame.size.height, tickView.frame.size.width, tickView.frame.size.height);
+    CGRect componentFrame = [self componentFrameInContentViewForIndex:index];
+    tickView.frame = CGRectMake(self.contentView.bounds.size.width - tickView.frame.size.width - 2 * PlainRoomCellLayoutConstants.readReceiptsViewRightMargin, CGRectGetMaxY(componentFrame) - tickView.frame.size.height, tickView.frame.size.width, tickView.frame.size.height);
 
     [self.contentView addSubview:tickView];
 }
@@ -800,8 +800,8 @@ NSString *const kMXKRoomBubbleCellKeyVerificationIncomingRequestDeclinePressed =
     }
     
     // Define 'Edit' button frame
-    UIImage *editIcon = [UIImage imageNamed:@"edit_icon"];
-    CGFloat editBtnPosX = self.bubbleInfoContainer.frame.size.width - RoomBubbleCellLayout.timestampLabelWidth - 22 - editIcon.size.width / 2;
+    UIImage *editIcon = AssetImages.editIcon.image;
+    CGFloat editBtnPosX = self.bubbleInfoContainer.frame.size.width - PlainRoomCellLayoutConstants.timestampLabelWidth - 22 - editIcon.size.width / 2;
     CGFloat editBtnPosY = isFirstDisplayedComponent ? -13 : component.position.y + self.msgTextViewTopConstraint.constant - self.bubbleInfoContainerTopConstraint.constant - 13;
     UIButton *editButton = [[UIButton alloc] initWithFrame:CGRectMake(editBtnPosX, editBtnPosY, 44, 44)];
     

@@ -1,31 +1,19 @@
 /*
- Copyright 2020 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2020-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "ManageSessionViewController.h"
-
-#import <MatrixKit/MatrixKit.h>
-
-#import <OLMKit/OLMKit.h>
 
 #import "AvatarGenerator.h"
 
 #import "ThemeService.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
+@import DesignKit;
 
 enum
 {
@@ -46,7 +34,7 @@ enum {
 };
 
 
-@interface ManageSessionViewController ()
+@interface ManageSessionViewController () <UserVerificationCoordinatorBridgePresenterDelegate, SSOAuthenticationPresenterDelegate>
 {
     // The device to display
     MXDevice *device;
@@ -64,6 +52,8 @@ enum {
 @property (nonatomic, strong) UserVerificationCoordinatorBridgePresenter *userVerificationCoordinatorBridgePresenter;
 
 @property (nonatomic, strong) ReauthenticationCoordinatorBridgePresenter *reauthenticationCoordinatorBridgePresenter;
+
+@property (nonatomic, strong) SSOAuthenticationPresenter *ssoAuthenticationPresenter;
 
 @end
 
@@ -97,10 +87,8 @@ enum {
     // Do any additional setup after loading the view, typically from a nib.
     
     self.navigationItem.title = [VectorL10n manageSessionTitle];
+    [self vc_removeBackTitle];
     
-    // Remove back bar button title when pushing a view controller
-    self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-
     [self.tableView registerClass:MXKTableViewCellWithLabelAndTextField.class forCellReuseIdentifier:[MXKTableViewCellWithLabelAndTextField defaultReuseIdentifier]];
     [self.tableView registerClass:MXKTableViewCellWithLabelAndSwitch.class forCellReuseIdentifier:[MXKTableViewCellWithLabelAndSwitch defaultReuseIdentifier]];
     [self.tableView registerNib:MXKTableViewCellWithTextView.nib forCellReuseIdentifier:[MXKTableViewCellWithTextView defaultReuseIdentifier]];
@@ -163,9 +151,6 @@ enum {
 {
     [super viewWillAppear:animated];
 
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"ManageSession"];
-
     // Release the potential pushed view controller
     [self releasePushedViewController];
 
@@ -190,10 +175,6 @@ enum {
 {
     // Keep ref on pushed view controller
     pushedViewController = viewController;
-
-    // Hide back button title
-    self.navigationItem.backBarButtonItem =[[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-
     [self.navigationController pushViewController:viewController animated:YES];
 }
 
@@ -308,11 +289,11 @@ enum {
     return count;
 }
 
-- (MXKTableViewCellWithLabelAndTextField*)getLabelAndTextFieldCell:(UITableView*)tableview forIndexPath:(NSIndexPath *)indexPath
+- (MXKTableViewCellWithLabelAndTextField*)getLabelAndTextFieldCell:(UITableView*)tableView forIndexPath:(NSIndexPath *)indexPath
 {
-    MXKTableViewCellWithLabelAndTextField *cell = [tableview dequeueReusableCellWithIdentifier:[MXKTableViewCellWithLabelAndTextField defaultReuseIdentifier] forIndexPath:indexPath];
+    MXKTableViewCellWithLabelAndTextField *cell = [tableView dequeueReusableCellWithIdentifier:[MXKTableViewCellWithLabelAndTextField defaultReuseIdentifier] forIndexPath:indexPath];
     
-    cell.mxkLabelLeadingConstraint.constant = cell.vc_separatorInset.left;
+    cell.mxkLabelLeadingConstraint.constant = tableView.vc_separatorInset.left;
     cell.mxkTextFieldLeadingConstraint.constant = 16;
     cell.mxkTextFieldTrailingConstraint.constant = 15;
     
@@ -336,11 +317,11 @@ enum {
     return cell;
 }
 
-- (MXKTableViewCellWithLabelAndSwitch*)getLabelAndSwitchCell:(UITableView*)tableview forIndexPath:(NSIndexPath *)indexPath
+- (MXKTableViewCellWithLabelAndSwitch*)getLabelAndSwitchCell:(UITableView*)tableView forIndexPath:(NSIndexPath *)indexPath
 {
-    MXKTableViewCellWithLabelAndSwitch *cell = [tableview dequeueReusableCellWithIdentifier:[MXKTableViewCellWithLabelAndSwitch defaultReuseIdentifier] forIndexPath:indexPath];
+    MXKTableViewCellWithLabelAndSwitch *cell = [tableView dequeueReusableCellWithIdentifier:[MXKTableViewCellWithLabelAndSwitch defaultReuseIdentifier] forIndexPath:indexPath];
 
-    cell.mxkLabelLeadingConstraint.constant = cell.vc_separatorInset.left;
+    cell.mxkLabelLeadingConstraint.constant = tableView.vc_separatorInset.left;
     cell.mxkSwitchTrailingConstraint.constant = 15;
 
     cell.mxkLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
@@ -388,29 +369,16 @@ enum {
     if (deviceInfo.trustLevel.isVerified)
     {
         cell.textLabel.text = [VectorL10n manageSessionTrusted];
-        cell.imageView.image = [UIImage imageNamed:@"encryption_trusted"];
+        cell.imageView.image = AssetImages.encryptionTrusted.image;
     }
     else
     {
         cell.textLabel.text = [VectorL10n manageSessionNotTrusted];
-        cell.imageView.image = [UIImage imageNamed:@"encryption_warning"];
+        cell.imageView.image = AssetImages.encryptionWarning.image;
     }
 
     return cell;
 }
-
-- (MXKTableViewCell*)descriptionCellForTableView:(UITableView*)tableView withText:(NSString*)text
-{
-    MXKTableViewCell *cell = [self getDefaultTableViewCell:tableView];
-    cell.textLabel.text = text;
-    cell.textLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
-    cell.textLabel.numberOfLines = 0;
-    cell.contentView.backgroundColor = ThemeService.shared.theme.headerBackgroundColor;
-    cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-    return cell;
-}
-
 
 - (MXKTableViewCellWithTextView*)textViewCellForTableView:(UITableView*)tableView atIndexPath:(NSIndexPath *)indexPath
 {
@@ -516,8 +484,8 @@ enum {
     {
         // Customize label style
         UITableViewHeaderFooterView *tableViewHeaderFooterView = (UITableViewHeaderFooterView*)view;
-        tableViewHeaderFooterView.textLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
-        tableViewHeaderFooterView.textLabel.font = [UIFont systemFontOfSize:15];
+        tableViewHeaderFooterView.textLabel.textColor = ThemeService.shared.theme.colors.secondaryContent;
+        tableViewHeaderFooterView.textLabel.font = ThemeService.shared.theme.fonts.footnote;
     }
 }
 
@@ -612,8 +580,8 @@ enum {
     [currentAlert dismissViewControllerAnimated:NO completion:nil];
     
     MXWeakify(self);
-    currentAlert = [UIAlertController alertControllerWithTitle:[MatrixKitL10n deviceDetailsRenamePromptTitle]
-                                                       message:[MatrixKitL10n deviceDetailsRenamePromptMessage]
+    currentAlert = [UIAlertController alertControllerWithTitle:[VectorL10n deviceDetailsRenamePromptTitle]
+                                                       message:[VectorL10n deviceDetailsRenamePromptMessage]
                                                 preferredStyle:UIAlertControllerStyleAlert];
     
     [currentAlert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
@@ -624,7 +592,7 @@ enum {
         textField.text = self->device.displayName;
     }];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction * action)
                              {
@@ -632,7 +600,7 @@ enum {
                                  self->currentAlert = nil;
                              }]];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok]
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction * action)
                              {
@@ -672,11 +640,59 @@ enum {
                                                                                                                                                             userId:self.mainSession.myUser.userId
                                                                                                                                                    userDisplayName:nil
                                                                                                                                                           deviceId:device.deviceId];
+    userVerificationCoordinatorBridgePresenter.delegate = self;
     [userVerificationCoordinatorBridgePresenter start];
     self.userVerificationCoordinatorBridgePresenter = userVerificationCoordinatorBridgePresenter;
 }
 
 - (void)removeDevice
+{
+    if (self.mainSession.hasOAuth2APIEnabled)
+    {
+        NSURL *logoutURL = [self.mainSession getLogoutDeviceURLFromID:device.deviceId];
+        if (logoutURL)
+        {
+            [self removeDeviceRedirectWithURL:logoutURL];
+        }
+        else
+        {
+            [self showRemoveDeviceRedirectError];
+        }
+    }
+    else
+    {
+        [self removeDeviceThroughAPI];
+    }
+}
+
+-(void) removeDeviceRedirectWithURL: (NSURL * _Nonnull) url
+{
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle: [VectorL10n manageSessionRedirect] message: nil preferredStyle:UIAlertControllerStyleAlert];
+    
+    MXWeakify(self);
+    UIAlertAction *action = [UIAlertAction actionWithTitle:[VectorL10n ok]
+                                                     style:UIAlertActionStyleDefault
+                                                   handler: ^(UIAlertAction * action) {
+        MXStrongifyAndReturnIfNil(self);
+        SSOAccountService *service = [[SSOAccountService alloc] initWithAccountURL:url];
+        SSOAuthenticationPresenter *presenter = [[SSOAuthenticationPresenter alloc] initWithSsoAuthenticationService:service];
+        presenter.delegate = self;
+        self.ssoAuthenticationPresenter = presenter;
+        
+        [presenter presentForIdentityProvider:nil with:@"" from:self animated:YES];
+    }];
+    
+    [alert addAction: action];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+-(void) showRemoveDeviceRedirectError
+{
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle: [VectorL10n manageSessionRedirectError] message: nil preferredStyle:UIAlertControllerStyleAlert];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+-(void) removeDeviceThroughAPI
 {
     [self startActivityIndicator];
     self.view.userInteractionEnabled = NO;
@@ -692,10 +708,10 @@ enum {
         self.reauthenticationCoordinatorBridgePresenter = nil;
     };
     
-    NSString *title = [MatrixKitL10n deviceDetailsDeletePromptTitle];
-    NSString *message = [MatrixKitL10n deviceDetailsDeletePromptMessage];
+    NSString *title = [VectorL10n deviceDetailsDeletePromptTitle];
+    NSString *message = [VectorL10n deviceDetailsDeletePromptMessage];
     
-    AuthenticatedEndpointRequest *deleteDeviceRequest = [[AuthenticatedEndpointRequest alloc] initWithPath:[NSString stringWithFormat:@"%@/devices/%@", kMXAPIPrefixPathR0, [MXTools encodeURIComponent:device.deviceId]] httpMethod:@"DELETE"];
+    AuthenticatedEndpointRequest *deleteDeviceRequest = [[AuthenticatedEndpointRequest alloc] initWithPath:[NSString stringWithFormat:@"%@/devices/%@", kMXAPIPrefixPathR0, [MXTools encodeURIComponent:device.deviceId]] httpMethod:@"DELETE" params:[[NSDictionary alloc] init]];
     
     ReauthenticationCoordinatorParameters *coordinatorParameters = [[ReauthenticationCoordinatorParameters alloc] initWithSession:self.mainSession presenter:self title:title message:message authenticatedEndpointRequest:deleteDeviceRequest];
     
@@ -722,6 +738,36 @@ enum {
     }];
     
     self.reauthenticationCoordinatorBridgePresenter = reauthenticationPresenter;
+}
+
+#pragma mark - UserVerificationCoordinatorBridgePresenterDelegate
+
+- (void)userVerificationCoordinatorBridgePresenterDelegateDidComplete:(UserVerificationCoordinatorBridgePresenter *)coordinatorBridgePresenter
+{
+    [self reloadDeviceWithCompletion:^{}];
+}
+
+#pragma mark - SSOAuthenticationPresenterDelegate
+
+- (void)ssoAuthenticationPresenterDidCancel:(SSOAuthenticationPresenter *)presenter
+{
+    self.ssoAuthenticationPresenter = nil;
+    MXLogDebug(@"OIDC account management complete.")
+    [self withdrawViewControllerAnimated:YES completion:nil];
+}
+
+- (void)ssoAuthenticationPresenter:(SSOAuthenticationPresenter *)presenter authenticationDidFailWithError:(NSError *)error
+{
+    self.ssoAuthenticationPresenter = nil;
+    MXLogError(@"OIDC account management failed.")
+}
+
+- (void)ssoAuthenticationPresenter:(SSOAuthenticationPresenter *)presenter
+  authenticationSucceededWithToken:(NSString *)token
+             usingIdentityProvider:(SSOIdentityProvider *)identityProvider
+{
+    self.ssoAuthenticationPresenter = nil;
+    MXLogWarning(@"Unexpected callback after OIDC account management.")
 }
 
 @end

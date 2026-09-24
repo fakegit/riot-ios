@@ -1,22 +1,15 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "FilesSearchCellData.h"
+
+#import "GeneratedInterface-Swift.h"
 
 @implementation FilesSearchCellData
 @synthesize roomId, senderDisplayName;
@@ -35,7 +28,7 @@
         roomId = event.roomId;
         
         // Title is here the file name stored in event body
-        title = [event.content[@"body"] isKindOfClass:[NSString class]] ? event.content[@"body"] : nil;
+        title = [event.content[kMXMessageBodyKey] isKindOfClass:[NSString class]] ? event.content[kMXMessageBodyKey] : nil;
         
         // Check attachment if any
         if ([searchDataSource.eventFormatter isSupportedAttachment:event])
@@ -98,10 +91,10 @@
         MXRoom *room = [searchDataSource.mxSession roomWithRoomId:roomId];
         if (room)
         {
-            roomDisplayName = room.summary.displayname;
+            roomDisplayName = room.summary.displayName;
             if (!roomDisplayName.length)
             {
-                roomDisplayName = [MatrixKitL10n roomDisplaynameEmptyRoom];
+                roomDisplayName = [VectorL10n roomDisplaynameEmptyRoom];
             }
         }
         else
@@ -126,27 +119,23 @@
 {
     MXEvent *event = searchResult.result;
     NSString *msgtype;
-    MXJSONModelSetString(msgtype, event.content[@"msgtype"]);
+    MXJSONModelSetString(msgtype, event.content[kMXMessageTypeKey]);
     
     if ([msgtype isEqualToString:kMXMessageTypeImage])
     {
-        return [UIImage imageNamed:@"file_photo_icon"];
+        return AssetImages.filePhotoIcon.image;
     }
     else if ([msgtype isEqualToString:kMXMessageTypeAudio])
     {
-        return [UIImage imageNamed:@"file_music_icon"];
+        return AssetImages.fileMusicIcon.image;
     }
     else if ([msgtype isEqualToString:kMXMessageTypeVideo])
     {
-       return [UIImage imageNamed:@"file_video_icon"];
-    }
-    else if ([msgtype isEqualToString:kMXMessageTypeLocation])
-    {
-        // Not supported yet
+        return AssetImages.fileVideoIcon.image;
     }
     else if ([msgtype isEqualToString:kMXMessageTypeFile])
     {
-        return [UIImage imageNamed:@"file_doc_icon"];
+        return AssetImages.fileDocIcon.image;
     }
     
     return nil;

@@ -33,6 +33,9 @@ targets:
 
     dependencies:
     - sdk: Intents.framework
+    - package: AnalyticsEvents
+    - package: DeviceKit
+    - package: DTCoreText
 
     configFiles:
       Debug: Debug.xcconfig
@@ -41,10 +44,31 @@ targets:
     sources:
     - path: .
     - path: ../Riot/Categories/Bundle.swift
+    - path: ../Riot/Categories/MXEvent.swift
     - path: ../Config/CommonConfiguration.swift
+    - path: ../Riot/Experiments/
     - path: ../Config/BuildSettings.swift
+    - path: ../Config/MDMSettings.swift
     - path: ../Config/Configurable.swift
     - path: ../Riot/Managers/Settings/RiotSettings.swift
     - path: ../Riot/Managers/EncryptionKeyManager/EncryptionKeyManager.swift
     - path: ../Riot/Managers/KeyValueStorage
     - path: ../Riot/PropertyWrappers/UserDefaultsBackedPropertyWrapper.swift
+    - path: ../Riot/Managers/Locale/LocaleProviderType.swift
+    - path: ../Riot/Managers/Locale/LocaleProvider.swift
+    - path: ../Riot/Modules/MatrixKit
+      excludes:
+        - "Controllers/**"
+        - "Models/*List/**"
+        - "Views/**"
+    - path: ../Riot/Modules/Analytics
+    - path: ../Riot/Managers/UserSessions
+    - path: ../Riot/Managers/AppInfo/
+    - path: ../Riot/Managers/Locale/LocaleProviderType.swift
+    - path: ../Riot/Generated/Strings.swift
+      excludes:
+        - "**/*.md" # excludes all files with the .md extension
+    - path: ../Riot/Modules/Room/TimelineCells/Styles/RoomTimelineStyleIdentifier.swift
+    - path: ../Riot/Modules/VoiceBroadcast/VoiceBroadcastSDK/MatrixSDK
+    - path: ../Riot/Managers/Theme
+    - path: ../Riot/Categories/UIColor.swift

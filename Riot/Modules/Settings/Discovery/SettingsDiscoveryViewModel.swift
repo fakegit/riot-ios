@@ -1,17 +1,8 @@
 /*
- Copyright 2019 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2019-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -54,13 +45,11 @@ import Foundation
     func process(viewAction: SettingsDiscoveryViewAction) {
         switch viewAction {
         case .load:
-            self.checkTerms()
+            checkTerms()
         case .acceptTerms:
-            self.acceptTerms()
+            coordinatorDelegate?.settingsDiscoveryViewModelDidTapAcceptIdentityServerTerms(self)
         case .select(threePid: let threePid):
-            self.coordinatorDelegate?.settingsDiscoveryViewModel(self, didSelectThreePidWith: threePid.medium.identifier, and: threePid.address)
-        case .tapUserSettingsLink:
-            self.coordinatorDelegate?.settingsDiscoveryViewModelDidTapUserSettingsLink(self)
+            coordinatorDelegate?.settingsDiscoveryViewModel(self, didSelectThreePidWith: threePid.medium.identifier, and: threePid.address)
         }
     }
     
@@ -114,28 +103,6 @@ import Foundation
         }, failure: { (error) in
             self.update(viewState: .error(error))
         })
-    }
-    
-    private func acceptTerms() {
-        guard let identityService = self.identityService else {
-            self.update(viewState: .loaded(displayMode: .noIdentityServer))
-            return
-        }
-        
-        // Launch an identity server request to trigger terms modal apparition
-        identityService.account { (response) in
-            switch response {
-            case .success:
-                // Display three pids if presents
-                self.updateViewStateFromCurrentThreePids()
-            case .failure(let error):
-                if MXError(nsError: error)?.errcode == kMXErrCodeStringTermsNotSigned {
-                    // Identity terms modal should appear
-                } else {
-                    self.update(viewState: .error(error))
-                }
-            }
-        }
     }
     
     private func canCheckTerms() -> Bool {

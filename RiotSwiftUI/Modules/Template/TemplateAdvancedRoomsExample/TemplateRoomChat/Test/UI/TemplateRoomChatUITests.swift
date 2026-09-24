@@ -1,73 +1,45 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import XCTest
 import RiotSwiftUI
+import XCTest
 
-@available(iOS 14.0, *)
-class TemplateRoomChatUITests: MockScreenTest {
-    
-    override class var screenType: MockScreenState.Type {
-        return MockTemplateRoomChatScreenState.self
-    }
-
-    override class func createTest() -> MockScreenTest {
-        return TemplateRoomChatUITests(selector: #selector(verifyTemplateRoomChatScreen))
-    }
-    
-    func verifyTemplateRoomChatScreen() throws {
-        guard let screenState = screenState as? MockTemplateRoomChatScreenState else { fatalError("no screen") }
-        switch screenState {
-        case .initializingRoom:
-            verifyInitializingRoom()
-        case .failedToInitializeRoom:
-            verifyFailedToInitializeRoom()
-        case .noMessages:
-            verifyNoMessages()
-        case .messages:
-            verifyMessages()
-        }
-    }
-    
-    func verifyInitializingRoom() {
+class TemplateRoomChatUITests: MockScreenTestCase {
+    func testInitializingRoom() {
+        app.goToScreenWithIdentifier(MockTemplateRoomChatScreenState.initializingRoom.title)
+        
         let loadingProgress = app.activityIndicators["loadingProgress"]
         XCTAssert(loadingProgress.exists)
     }
     
-    func verifyFailedToInitializeRoom() {
+    func testFailedToInitializeRoom() {
+        app.goToScreenWithIdentifier(MockTemplateRoomChatScreenState.failedToInitializeRoom.title)
+        
         let errorMessage = app.staticTexts["errorMessage"]
         XCTAssert(errorMessage.exists)
     }
     
-    func verifyNoMessages() {
+    func testNoMessages() {
+        app.goToScreenWithIdentifier(MockTemplateRoomChatScreenState.noMessages.title)
+        
         let errorMessage = app.staticTexts["errorMessage"]
         XCTAssert(errorMessage.exists)
     }
     
-    func verifyMessages() {
+    func testMessages() {
+        app.goToScreenWithIdentifier(MockTemplateRoomChatScreenState.messages.title)
+        
         // Verify bubble grouping with:
         // 3 bubbles
-        let bubbleCount = app.images.matching(identifier:"bubbleImage").count
+        let bubbleCount = app.images.matching(identifier: "bubbleImage").count
         XCTAssertEqual(bubbleCount, 3)
         
         // and 4 text items
-        let bubbleTextItemCount = app.staticTexts.matching(identifier:"bubbleTextContent").count
+        let bubbleTextItemCount = app.staticTexts.matching(identifier: "bubbleTextContent").count
         XCTAssertEqual(bubbleTextItemCount, 4)
-        
-        
     }
-
 }

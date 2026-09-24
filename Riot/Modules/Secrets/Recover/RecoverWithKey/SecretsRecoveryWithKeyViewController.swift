@@ -1,17 +1,8 @@
 /*
- Copyright 2020 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2020-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import UIKit
@@ -43,6 +34,7 @@ final class SecretsRecoveryWithKeyViewController: UIViewController {
     
     private var viewModel: SecretsRecoveryWithKeyViewModelType!
     private var keyboardAvoider: KeyboardAvoider?
+    private var cancellable: Bool!
     private var theme: Theme!
     private var errorPresenter: MXKErrorPresentation!
     private var activityPresenter: ActivityIndicatorPresenter!
@@ -52,9 +44,10 @@ final class SecretsRecoveryWithKeyViewController: UIViewController {
     
     // MARK: - Setup
     
-    class func instantiate(with viewModel: SecretsRecoveryWithKeyViewModelType) -> SecretsRecoveryWithKeyViewController {
+    class func instantiate(with viewModel: SecretsRecoveryWithKeyViewModelType, cancellable: Bool) -> SecretsRecoveryWithKeyViewController {
         let viewController = StoryboardScene.SecretsRecoveryWithKeyViewController.initialScene.instantiate()
         viewController.viewModel = viewModel
+        viewController.cancellable = cancellable
         viewController.theme = ThemeService.shared().theme
         return viewController
     }
@@ -86,11 +79,13 @@ final class SecretsRecoveryWithKeyViewController: UIViewController {
     // MARK: - Private
     
     private func setupViews() {
-        let cancelBarButtonItem = MXKBarButtonItem(title: VectorL10n.cancel, style: .plain) { [weak self] in
-            self?.cancelButtonAction()
+        if self.cancellable {
+            let cancelBarButtonItem = MXKBarButtonItem(title: VectorL10n.cancel, style: .plain) { [weak self] in
+                self?.cancelButtonAction()
+            }
+            self.navigationItem.rightBarButtonItem = cancelBarButtonItem
         }
-        self.navigationItem.rightBarButtonItem = cancelBarButtonItem
-        
+
         self.title = VectorL10n.secretsRecoveryWithKeyTitle
         
         self.scrollView.keyboardDismissMode = .interactive
@@ -103,7 +98,7 @@ final class SecretsRecoveryWithKeyViewController: UIViewController {
         switch self.viewModel.recoveryGoal {
         case .default, .keyBackup, .restoreSecureBackup:
             informationText = VectorL10n.secretsRecoveryWithKeyInformationDefault
-        case .unlockSecureBackup(_):
+        case .unlockSecureBackup:
             informationText = VectorL10n.secretsRecoveryWithKeyInformationUnlockSecureBackupWithKey
         case .verifyDevice:
             informationText = VectorL10n.secretsRecoveryWithKeyInformationVerifyDevice

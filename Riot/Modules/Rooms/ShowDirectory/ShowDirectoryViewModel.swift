@@ -139,11 +139,7 @@ final class ShowDirectoryViewModel: NSObject, ShowDirectoryViewModelType {
         
         currentOperation = dataSource.paginate({ [weak self] (roomsAdded) in
             guard let self = self else { return }
-            if roomsAdded > 0 {
-                self.update(viewState: .loaded(self.sections))
-            } else {
-                self.update(viewState: .loadedWithoutUpdate)
-            }
+            self.update(viewState: .loaded(self.sections))
             self.currentOperation = nil
         }, failure: { [weak self] (error) in
             guard let self = self else { return }
@@ -241,7 +237,7 @@ final class ShowDirectoryViewModel: NSObject, ShowDirectoryViewModelType {
     }
     
     private func roomCellViewModel(with room: MXRoom) -> DirectoryRoomTableViewCellVM {
-        let displayName = room.summary.displayname
+        let displayName = room.summary.displayName
         let joinedMembersCount = Int(room.summary.membersCount.joined)
         let topic = MXTools.stripNewlineCharacters(room.summary.topic)
         let isJoined = room.summary.membership == .join || room.summary.membershipTransitionState == .joined

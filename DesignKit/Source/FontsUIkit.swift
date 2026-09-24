@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -20,7 +11,7 @@ import UIKit
 /**
  ObjC class for holding fonts for use in UIKit.
  */
-@objc public class FontsUIKit: NSObject, Fonts {
+@objcMembers public class FontsUIKit: NSObject, Fonts {
     
     public var largeTitle: UIFont
     
@@ -63,25 +54,25 @@ import UIKit
     public var caption2SB: UIFont
     
     public init(values: ElementFonts) {
-        self.largeTitle = values.largeTitle
-        self.largeTitleB = values.largeTitleB
-        self.title1 = values.title1
-        self.title1B = values.title1B
-        self.title2 = values.title2
-        self.title2B = values.title2B
-        self.title3 = values.title3
-        self.title3SB = values.title3SB
-        self.headline = values.headline
-        self.subheadline = values.subheadline
-        self.body = values.body
-        self.bodySB = values.bodySB
-        self.callout = values.callout
-        self.calloutSB = values.calloutSB
-        self.footnote = values.footnote
-        self.footnoteSB = values.footnoteSB
-        self.caption1 = values.caption1
-        self.caption1SB = values.caption1SB
-        self.caption2 = values.caption2
-        self.caption2SB = values.caption2SB
+        self.largeTitle = values.largeTitle.uiFont
+        self.largeTitleB = values.largeTitleB.uiFont
+        self.title1 = values.title1.uiFont
+        self.title1B = values.title1B.uiFont
+        self.title2 = values.title2.uiFont
+        self.title2B = values.title2B.uiFont
+        self.title3 = values.title3.uiFont
+        self.title3SB = values.title3SB.uiFont
+        self.headline = values.headline.uiFont
+        self.subheadline = values.subheadline.uiFont
+        self.body = values.body.uiFont
+        self.bodySB = values.bodySB.uiFont
+        self.callout = values.callout.uiFont
+        self.calloutSB = values.calloutSB.uiFont
+        self.footnote = values.footnote.uiFont
+        self.footnoteSB = values.footnoteSB.uiFont
+        self.caption1 = values.caption1.uiFont
+        self.caption1SB = values.caption1SB.uiFont
+        self.caption2 = values.caption2.uiFont
+        self.caption2SB = values.caption2SB.uiFont
     }
 }

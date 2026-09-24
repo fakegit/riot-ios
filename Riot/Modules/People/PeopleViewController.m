@@ -1,17 +1,9 @@
 /*
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "PeopleViewController.h"
@@ -24,15 +16,16 @@
 #import "RecentTableViewCell.h"
 #import "InviteRecentTableViewCell.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
-@interface PeopleViewController () <SpaceMembersCoordinatorBridgePresenterDelegate>
+@interface PeopleViewController () <SpaceMembersCoordinatorBridgePresenterDelegate, MasterTabBarItemDisplayProtocol>
 {
     NSInteger          directRoomsSectionNumber;
     RecentsDataSource *recentsDataSource;
 }
 
 @property(nonatomic) SpaceMembersCoordinatorBridgePresenter *spaceMembersCoordinatorBridgePresenter;
+@property (nonatomic, strong) MXThrottler *tableViewPaginationThrottler;
 
 @end
 
@@ -51,7 +44,8 @@
     
     directRoomsSectionNumber = 0;
     
-    self.screenName = @"People";
+    self.screenTracker = [[AnalyticsScreenTracker alloc] initWithScreen:AnalyticsScreenPeople];
+    self.tableViewPaginationThrottler = [[MXThrottler alloc] initWithMinimumDelay:0.1];
 }
 
 - (void)viewDidLoad
@@ -66,8 +60,9 @@
     // This will be used by the shared RecentsDataSource instance for sanity checks (see UITableViewDataSource methods).
     self.recentsTableView.tag = RecentsDataSourceModePeople;
     
+    UIImage *fabImage = self.dataSource.currentSpace == nil ? AssetImages.peopleFloatingAction.image : AssetImages.addMemberFloatingAction.image;
     // Add the (+) button programmatically
-    plusButtonImageView = [self vc_addFABWithImage:[UIImage imageNamed:@"people_floating_action"]
+    plusButtonImageView = [self vc_addFABWithImage:fabImage
                                             target:self
                                             action:@selector(onPlusButtonPressed)];
 }
@@ -81,29 +76,47 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-    
-    [AppDelegate theDelegate].masterTabBarController.navigationItem.title = [VectorL10n titlePeople];
     [AppDelegate theDelegate].masterTabBarController.tabBar.tintColor = ThemeService.shared.theme.tintColor;
     
     if ([self.dataSource isKindOfClass:RecentsDataSource.class])
     {
         // Take the lead on the shared data source.
         recentsDataSource = (RecentsDataSource*)self.dataSource;
-        recentsDataSource.areSectionsShrinkable = NO;
-        [recentsDataSource setDelegate:self andRecentsDataSourceMode:RecentsDataSourceModePeople];
+        
+        if (recentsDataSource.recentsDataSourceMode != RecentsDataSourceModePeople)
+        {
+            // Take the lead on the shared data source.
+            [recentsDataSource setDelegate:self andRecentsDataSourceMode:RecentsDataSourceModePeople];
+            
+            // Reset filtering on the shared data source when switching tabs
+            [recentsDataSource searchWithPatterns:nil];
+            [self.recentsSearchBar setText:nil];
+        }
     }
 }
 
 #pragma mark - UITableView delegate
 
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    return 0.0;
-}
-
-- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
-{
-    return nil;
+    if ([super respondsToSelector:@selector(tableView:willDisplayCell:forRowAtIndexPath:)])
+    {
+        [super tableView:tableView willDisplayCell:cell forRowAtIndexPath:indexPath];
+    }
+    
+    [self.tableViewPaginationThrottler throttle:^{
+        NSInteger section = indexPath.section;
+        if (tableView.numberOfSections <= section)
+        {
+            return;
+        }
+        
+        NSInteger numberOfRowsInSection = [tableView numberOfRowsInSection:section];
+        if (indexPath.row == numberOfRowsInSection - 1)
+        {
+            [self->recentsDataSource paginateInSection:section];
+        }
+    }];
 }
 
 #pragma mark - Override RecentsViewController
@@ -140,7 +153,7 @@
     // Check whether the recents data source is correctly configured.
     if (recentsDataSource.recentsDataSourceMode == RecentsDataSourceModePeople)
     {
-        [self scrollToTheTopTheNextRoomWithMissedNotificationsInSection:recentsDataSource.conversationSection];
+        [self scrollToTheTopTheNextRoomWithMissedNotificationsInSection:[recentsDataSource.sections sectionIndexForSectionType:RecentsDataSourceSectionTypePeople]];
     }
 }
 
@@ -157,30 +170,12 @@
 {
     if (ThemeService.shared.isCurrentThemeDark)
     {
-        return [UIImage imageNamed:@"people_empty_screen_artwork_dark"];
+        return AssetImages.peopleEmptyScreenArtworkDark.image;
     }
     else
     {
-        return [UIImage imageNamed:@"people_empty_screen_artwork"];
+        return AssetImages.peopleEmptyScreenArtwork.image;
     }
-}
-
-- (BOOL)shouldShowEmptyView
-{
-    // Do not present empty screen while searching
-    if (recentsDataSource.searchPatternsList.count)
-    {
-        return NO;
-    }
-    
-    return [self totalItemCounts] == 0;
-}
-
-// Total items to display on the screen
-- (NSUInteger)totalItemCounts
-{
-    return recentsDataSource.invitesCellDataArray.count
-    + recentsDataSource.conversationCellDataArray.count;
 }
 
 #pragma mark - SpaceMembersCoordinatorBridgePresenterDelegate
@@ -190,6 +185,13 @@
     [coordinatorBridgePresenter dismissWithAnimated:YES completion:^{
         self.spaceMembersCoordinatorBridgePresenter = nil;
     }];
+}
+
+#pragma mark - MasterTabBarItemDisplayProtocol
+
+- (NSString *)masterTabBarItemTitle
+{
+    return [VectorL10n titlePeople];
 }
 
 @end

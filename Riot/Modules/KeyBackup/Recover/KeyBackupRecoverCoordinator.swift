@@ -1,17 +1,8 @@
 /*
- Copyright 2019 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2019-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -22,7 +13,7 @@ final class KeyBackupRecoverCoordinator: KeyBackupRecoverCoordinatorType {
     
     // MARK: Private
     
-    private let session: MXSession
+    private let keyBackup: MXKeyBackup
     private let navigationRouter: NavigationRouterType
     private let keyBackupVersion: MXKeyBackupVersion
     
@@ -34,8 +25,8 @@ final class KeyBackupRecoverCoordinator: KeyBackupRecoverCoordinatorType {
     
     // MARK: - Setup
     
-    init(session: MXSession, keyBackupVersion: MXKeyBackupVersion, navigationRouter: NavigationRouterType? = nil) {
-        self.session = session
+    init(keyBackup: MXKeyBackup, keyBackupVersion: MXKeyBackupVersion, navigationRouter: NavigationRouterType? = nil) {
+        self.keyBackup = keyBackup
         self.keyBackupVersion = keyBackupVersion
         
         if let navigationRouter = navigationRouter {
@@ -52,7 +43,7 @@ final class KeyBackupRecoverCoordinator: KeyBackupRecoverCoordinatorType {
         let rootCoordinator: Coordinator & Presentable
         
         // Check if we have the private key locally
-        if self.session.crypto.backup.hasPrivateKeyInCryptoStore {
+        if keyBackup.hasPrivateKeyInCryptoStore {
             rootCoordinator = self.createRecoverFromPrivateKeyCoordinator()
         } else {
             rootCoordinator = self.createRecoverWithUserInteractionCoordinator()
@@ -84,7 +75,7 @@ final class KeyBackupRecoverCoordinator: KeyBackupRecoverCoordinatorType {
         let coordinator: Coordinator & Presentable
         
         // Check if a passphrase has been set for given backup
-        if let megolmBackupAuthData = MXMegolmBackupAuthData(fromJSON: self.keyBackupVersion.authData), megolmBackupAuthData.privateKeySalt != nil {
+        if self.keyBackupVersion.authData["private_key_salt"] != nil {
             coordinator = self.createRecoverFromPassphraseCoordinator()
         } else {
             coordinator = self.createRecoverFromRecoveryKeyCoordinator()
@@ -93,19 +84,19 @@ final class KeyBackupRecoverCoordinator: KeyBackupRecoverCoordinatorType {
     }
     
     private func createRecoverFromPrivateKeyCoordinator() -> KeyBackupRecoverFromPrivateKeyCoordinator {
-        let coordinator = KeyBackupRecoverFromPrivateKeyCoordinator(keyBackup: self.session.crypto.backup, keyBackupVersion: self.keyBackupVersion)
+        let coordinator = KeyBackupRecoverFromPrivateKeyCoordinator(keyBackup: keyBackup, keyBackupVersion: self.keyBackupVersion)
         coordinator.delegate = self
         return coordinator
     }
     
     private func createRecoverFromPassphraseCoordinator() -> KeyBackupRecoverFromPassphraseCoordinator {
-        let coordinator = KeyBackupRecoverFromPassphraseCoordinator(keyBackup: self.session.crypto.backup, keyBackupVersion: self.keyBackupVersion)
+        let coordinator = KeyBackupRecoverFromPassphraseCoordinator(keyBackup: keyBackup, keyBackupVersion: self.keyBackupVersion)
         coordinator.delegate = self
         return coordinator
     }
     
     private func createRecoverFromRecoveryKeyCoordinator() -> KeyBackupRecoverFromRecoveryKeyCoordinator {
-        let coordinator = KeyBackupRecoverFromRecoveryKeyCoordinator(keyBackup: self.session.crypto.backup, keyBackupVersion: self.keyBackupVersion)
+        let coordinator = KeyBackupRecoverFromRecoveryKeyCoordinator(keyBackup: keyBackup, keyBackupVersion: self.keyBackupVersion)
         coordinator.delegate = self
         return coordinator
     }

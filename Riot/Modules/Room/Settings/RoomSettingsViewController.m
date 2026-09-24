@@ -1,18 +1,10 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomSettingsViewController.h"
@@ -28,7 +20,7 @@
 #import "MXRoom+Riot.h"
 #import "MXRoomSummary+Riot.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import "RoomMemberDetailsViewController.h"
 
@@ -38,9 +30,9 @@ enum
 {
     SECTION_TAG_MAIN,
     SECTION_TAG_ACCESS,
+    SECTION_TAG_PROMOTION,
     SECTION_TAG_HISTORY,
     SECTION_TAG_ADDRESSES,
-    SECTION_TAG_FLAIR,
     SECTION_TAG_BANNED_USERS,
     SECTION_TAG_BANNED_ADVANCED
 };
@@ -52,17 +44,19 @@ enum
     ROOM_SETTINGS_MAIN_SECTION_ROW_TOPIC,
     ROOM_SETTINGS_MAIN_SECTION_ROW_TAG,
     ROOM_SETTINGS_MAIN_SECTION_ROW_DIRECT_CHAT,
-    ROOM_SETTINGS_MAIN_SECTION_ROW_MUTE_NOTIFICATIONS,
-    ROOM_SETTINGS_MAIN_SECTION_ROW_LEAVE
+    ROOM_SETTINGS_MAIN_SECTION_ROW_MUTE_NOTIFICATIONS
 };
 
 enum
 {
-    ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_INVITED_ONLY,
-    ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE_APART_FROM_GUEST,
-    ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE,
+    ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ACCESS,
     ROOM_SETTINGS_ROOM_ACCESS_DIRECTORY_VISIBILITY,
     ROOM_SETTINGS_ROOM_ACCESS_MISSING_ADDRESS_WARNING
+};
+
+enum
+{
+    ROOM_SETTINGS_ROOM_PROMOTE_SECTION_ROW_SUGGEST
 };
 
 enum
@@ -71,12 +65,6 @@ enum
     ROOM_SETTINGS_HISTORY_VISIBILITY_SECTION_ROW_MEMBERS_ONLY,
     ROOM_SETTINGS_HISTORY_VISIBILITY_SECTION_ROW_MEMBERS_ONLY_SINCE_INVITED,
     ROOM_SETTINGS_HISTORY_VISIBILITY_SECTION_ROW_MEMBERS_ONLY_SINCE_JOINED
-};
-
-enum
-{
-    ROOM_SETTINGS_RELATED_GROUPS_NEW_GROUP,
-    ROOM_SETTINGS_RELATED_GROUPS_OFFSET = 1000
 };
 
 enum
@@ -111,8 +99,6 @@ NSString *const kRoomSettingsHistoryVisibilityKey = @"kRoomSettingsHistoryVisibi
 NSString *const kRoomSettingsNewAliasesKey = @"kRoomSettingsNewAliasesKey";
 NSString *const kRoomSettingsRemovedAliasesKey = @"kRoomSettingsRemovedAliasesKey";
 NSString *const kRoomSettingsCanonicalAliasKey = @"kRoomSettingsCanonicalAliasKey";
-NSString *const kRoomSettingsNewRelatedGroupKey = @"kRoomSettingsNewRelatedGroupKey";
-NSString *const kRoomSettingsRemovedRelatedGroupKey = @"kRoomSettingsRemovedRelatedGroupKey";
 NSString *const kRoomSettingsEncryptionKey = @"kRoomSettingsEncryptionKey";
 NSString *const kRoomSettingsEncryptionBlacklistUnverifiedDevicesKey = @"kRoomSettingsEncryptionBlacklistUnverifiedDevicesKey";
 
@@ -120,13 +106,12 @@ NSString *const kRoomSettingsNameCellViewIdentifier = @"kRoomSettingsNameCellVie
 NSString *const kRoomSettingsTopicCellViewIdentifier = @"kRoomSettingsTopicCellViewIdentifier";
 NSString *const kRoomSettingsWarningCellViewIdentifier = @"kRoomSettingsWarningCellViewIdentifier";
 NSString *const kRoomSettingsNewAddressCellViewIdentifier = @"kRoomSettingsNewAddressCellViewIdentifier";
-NSString *const kRoomSettingsNewCommunityCellViewIdentifier = @"kRoomSettingsNewCommunityCellViewIdentifier";
 NSString *const kRoomSettingsAddressCellViewIdentifier = @"kRoomSettingsAddressCellViewIdentifier";
 NSString *const kRoomSettingsAdvancedCellViewIdentifier = @"kRoomSettingsAdvancedCellViewIdentifier";
 NSString *const kRoomSettingsAdvancedEnableE2eCellViewIdentifier = @"kRoomSettingsAdvancedEnableE2eCellViewIdentifier";
 NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSettingsAdvancedE2eEnabledCellViewIdentifier";
 
-@interface RoomSettingsViewController () <SingleImagePickerPresenterDelegate, TableViewSectionsDelegate>
+@interface RoomSettingsViewController () <SingleImagePickerPresenterDelegate, TableViewSectionsDelegate, RoomAccessCoordinatorBridgePresenterDelegate, RoomSuggestionCoordinatorBridgePresenterDelegate>
 {
     // The updated user data
     NSMutableDictionary<NSString*, id> *updatedItemsDict;
@@ -140,9 +125,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     
     // Room Access items
     
-    TableViewCellWithCheckBoxAndLabel *accessInvitedOnlyTickCell;
-    TableViewCellWithCheckBoxAndLabel *accessAnyoneApartGuestTickCell;
-    TableViewCellWithCheckBoxAndLabel *accessAnyoneTickCell;
     UISwitch *directoryVisibilitySwitch;
     MXRoomDirectoryVisibility actualDirectoryVisibility;
     MXHTTPOperation* actualDirectoryVisibilityRequest;
@@ -155,18 +137,11 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     NSUInteger localAddressesCount;
     UITextField* addAddressTextField;
     
-    // Related groups/communities
-    NSMutableArray<NSString *> *relatedGroups;
-    UITextField* addGroupTextField;
-    
     // The potential image loader
     MXMediaLoader *uploader;
     
     // The pending http operation
     MXHTTPOperation* pendingOperation;
-    
-    // the updating spinner
-    UIActivityIndicatorView* updatingSpinner;
     
     UIAlertController *currentAlert;
     
@@ -181,6 +156,10 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     
     // Observe kThemeServiceDidChangeThemeNotification to handle user interface theme change.
     id kThemeServiceDidChangeThemeNotificationObserver;
+    
+    RoomAccessCoordinatorBridgePresenter *roomAccessPresenter;
+    
+    RoomSuggestionCoordinatorBridgePresenter *roomSuggestionPresenter;
 }
 
 @property (nonatomic, strong) SingleImagePickerPresenter *imagePickerPresenter;
@@ -246,7 +225,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     historyVisibilityTickCells = [[NSMutableDictionary alloc] initWithCapacity:4];
     
     roomAddresses = [NSMutableArray array];
-    relatedGroups = [NSMutableArray array];
     
     [self.tableView registerClass:MXKTableViewCellWithLabelAndSwitch.class forCellReuseIdentifier:[MXKTableViewCellWithLabelAndSwitch defaultReuseIdentifier]];
     [self.tableView registerClass:MXKTableViewCellWithLabelAndMXKImageView.class forCellReuseIdentifier:[MXKTableViewCellWithLabelAndMXKImageView defaultReuseIdentifier]];
@@ -256,7 +234,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     [self.tableView registerClass:MXKTableViewCellWithLabelAndTextField.class forCellReuseIdentifier:kRoomSettingsNameCellViewIdentifier];
     [self.tableView registerClass:TableViewCellWithLabelAndLargeTextView.class forCellReuseIdentifier:kRoomSettingsTopicCellViewIdentifier];
     [self.tableView registerClass:MXKTableViewCellWithLabelAndTextField.class forCellReuseIdentifier:kRoomSettingsNewAddressCellViewIdentifier];
-    [self.tableView registerClass:MXKTableViewCellWithLabelAndTextField.class forCellReuseIdentifier:kRoomSettingsNewCommunityCellViewIdentifier];
     [self.tableView registerClass:UITableViewCell.class forCellReuseIdentifier:kRoomSettingsAddressCellViewIdentifier];
     [self.tableView registerClass:UITableViewCell.class forCellReuseIdentifier:kRoomSettingsWarningCellViewIdentifier];
     
@@ -264,6 +241,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     [self.tableView registerClass:TableViewCellWithCheckBoxes.class forCellReuseIdentifier:[TableViewCellWithCheckBoxes defaultReuseIdentifier]];
     [self.tableView registerClass:TableViewCellWithCheckBoxAndLabel.class forCellReuseIdentifier:[TableViewCellWithCheckBoxAndLabel defaultReuseIdentifier]];
     [self.tableView registerClass:MXKTableViewCell.class forCellReuseIdentifier:[MXKTableViewCell defaultReuseIdentifier]];
+    [self.tableView registerClass:TitleAndRightDetailTableViewCell.class forCellReuseIdentifier:[TitleAndRightDetailTableViewCell defaultReuseIdentifier]];
     
     // Enable self sizing cells
     self.tableView.rowHeight = UITableViewAutomaticDimension;
@@ -311,10 +289,9 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"RoomSettings"];
     
+    [self.screenTracker trackScreen];
+
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didUpdateRules:) name:kMXNotificationCenterDidUpdateRules object:nil];
     
     // Observe appDelegateDidTapStatusBarNotificationObserver.
@@ -419,12 +396,11 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     historyVisibilityTickCells = nil;
     
     roomAddresses = nil;
-    relatedGroups = nil;
     
     if (extraEventsListener)
     {
         MXWeakify(self);
-        [mxRoom liveTimeline:^(MXEventTimeline *liveTimeline) {
+        [mxRoom liveTimeline:^(id<MXEventTimeline> liveTimeline) {
             MXStrongifyAndReturnIfNil(self);
 
             [liveTimeline removeListener:self->extraEventsListener];
@@ -514,8 +490,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         localAddressesCount++;
     }
     
-    [self refreshRelatedGroups];
-    
     //  create sections
     NSMutableArray<Section*> *tmpSections = [NSMutableArray arrayWithCapacity:SECTION_TAG_BANNED_ADVANCED + 1];
     
@@ -532,15 +506,12 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     {
         [sectionMain addRowWithTag:ROOM_SETTINGS_MAIN_SECTION_ROW_MUTE_NOTIFICATIONS];
     }
-    [sectionMain addRowWithTag:ROOM_SETTINGS_MAIN_SECTION_ROW_LEAVE];
     [tmpSections addObject:sectionMain];
     
     if (RiotSettings.shared.roomSettingsScreenAllowChangingAccessSettings)
     {
         Section *sectionAccess = [Section sectionWithTag:SECTION_TAG_ACCESS];
-        [sectionAccess addRowWithTag:ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_INVITED_ONLY];
-        [sectionAccess addRowWithTag:ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE_APART_FROM_GUEST];
-        [sectionAccess addRowWithTag:ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE];
+        [sectionAccess addRowWithTag:ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ACCESS];
         
         // Check whether a room address is required for the current join rule
         NSString *joinRule = updatedItemsDict[kRoomSettingsJoinRuleKey];
@@ -555,17 +526,25 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             // Notify the user that a room address is required.
             [sectionAccess addRowWithTag:ROOM_SETTINGS_ROOM_ACCESS_MISSING_ADDRESS_WARNING];
         }
-        [sectionAccess addRowWithTag:ROOM_SETTINGS_ROOM_ACCESS_DIRECTORY_VISIBILITY];
         
         if (mxRoom.isDirect)
         {
-            sectionAccess.headerTitle = [VectorL10n roomDetailsAccessSectionAnyoneForDm];
+            sectionAccess.headerTitle = [VectorL10n roomDetailsAccessSectionForDm];
         }
         else
         {
             sectionAccess.headerTitle = [VectorL10n roomDetailsAccessSection];
         }
         [tmpSections addObject:sectionAccess];
+        
+        if (RiotSettings.shared.roomSettingsScreenAllowChangingAccessSettings)
+        {
+            Section *promotionAccess = [Section sectionWithTag:SECTION_TAG_PROMOTION];
+            promotionAccess.headerTitle = VectorL10n.roomDetailsPromoteRoomTitle;
+            [promotionAccess addRowWithTag:ROOM_SETTINGS_ROOM_ACCESS_DIRECTORY_VISIBILITY];
+            [promotionAccess addRowWithTag:ROOM_SETTINGS_ROOM_PROMOTE_SECTION_ROW_SUGGEST];
+            [tmpSections addObject:promotionAccess];
+        }
     }
     
     if (RiotSettings.shared.roomSettingsScreenAllowChangingHistorySettings)
@@ -596,34 +575,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         [sectionAddresses addRowWithTag:ROOM_SETTINGS_ROOM_ADDRESS_NEW_ALIAS];
         sectionAddresses.headerTitle = [VectorL10n roomDetailsAddressesSection];
         [tmpSections addObject:sectionAddresses];
-    }
-    
-    if (RiotSettings.shared.roomSettingsScreenShowFlairSettings)
-    {
-        Section *sectionFlair = [Section sectionWithTag:SECTION_TAG_FLAIR];
-        
-        for (NSInteger counter = 0; counter < relatedGroups.count; counter++)
-        {
-            [sectionFlair addRowWithTag:counter + ROOM_SETTINGS_RELATED_GROUPS_OFFSET];
-        }
-        
-        if (self.mainSession)
-        {
-            // Check user's power level to know whether the user is allowed to add communities to this room
-            MXRoomPowerLevels *powerLevels = [mxRoomState powerLevels];
-            NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
-            
-            if (oneSelfPowerLevel >= [powerLevels minimumPowerLevelForSendingEventAsStateEvent:kMXEventTypeStringRoomRelatedGroups])
-            {
-                [sectionFlair addRowWithTag:ROOM_SETTINGS_RELATED_GROUPS_NEW_GROUP];
-            }
-        }
-        
-        sectionFlair.headerTitle = [VectorL10n roomDetailsFlairSection];
-        if ([sectionFlair hasAnyRows])
-        {
-            [tmpSections addObject:sectionFlair];
-        }
     }
     
     if (bannedMembers.count)
@@ -658,7 +609,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             {
                 // Check user's power level to know whether the user is allowed to turn on the encryption mode
                 MXRoomPowerLevels *powerLevels = [mxRoomState powerLevels];
-                NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
+                NSInteger oneSelfPowerLevel = [mxRoomState powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
                 
                 if (oneSelfPowerLevel >= [powerLevels minimumPowerLevelForSendingEventAsStateEvent:kMXEventTypeStringRoomEncryption])
                 {
@@ -701,7 +652,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             return;
         
         MXRoomPowerLevels *powerLevels = [mxRoomState powerLevels];
-        NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
+        NSInteger oneSelfPowerLevel = [mxRoomState powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
         
         if (oneSelfPowerLevel < [powerLevels minimumPowerLevelForSendingEventAsStateEvent:eventTypeForSelectedField])
             return;
@@ -849,7 +800,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                        message:[VectorL10n roomDetailsSaveChangesPrompt]
                                                 preferredStyle:UIAlertControllerStyleAlert];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n no]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n no]
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -860,12 +811,19 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                            
                                                            [self->updatedItemsDict removeAllObjects];
                                                            
-                                                           [self withdrawViewControllerAnimated:YES completion:nil];
+                                                           if (self.delegate)
+                                                           {
+                                                               [self.delegate roomSettingsViewControllerDidCancel:self];
+                                                           }
+                                                           else
+                                                           {
+                                                               [self withdrawViewControllerAnimated:YES completion:nil];
+                                                           }
                                                        }
                                                        
                                                    }]];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n yes]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n yes]
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -916,7 +874,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                            
                                                        }]];
         
-        [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+        [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                          style:UIAlertActionStyleCancel
                                                        handler:^(UIAlertAction * action) {
                                                            
@@ -1027,31 +985,37 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n roomDetailsCopyRoomUrl]
                                                          style:UIAlertActionStyleDefault
                                                        handler:^(UIAlertAction * action) {
-                                                           
-                                                           if (weakSelf)
-                                                           {
-                                                               typeof(self) self = weakSelf;
-                                                               self->currentAlert = nil;
-                                                               
-                                                               // Create a matrix.to permalink to the room
-                                                               
-                                                               NSString *permalink = [MXTools permalinkToRoom:roomAliasLabel.text];
-                                                               
-                                                               if (permalink)
-                                                               {
-                                                                   MXKPasteboardManager.shared.pasteboard.string = permalink;
-                                                               }
-                                                               else
-                                                               {
-                                                                   MXLogDebug(@"[RoomSettingsViewController] Copy room URL failed. Room URL is nil");
-                                                               }
-                                                           }
-                                                           
-                                                       }]];
+            
+            if (weakSelf)
+            {
+                typeof(self) self = weakSelf;
+                self->currentAlert = nil;
+                
+                // Create a matrix.to permalink to the room
+                
+                NSString *permalink = [MXTools permalinkToRoom:roomAliasLabel.text];
+                NSURL *url = [NSURL URLWithString:permalink];
+
+                if (url)
+                {
+                    MXKPasteboardManager.shared.pasteboard.URL = url;
+                    [self.view vc_toastWithMessage:VectorL10n.roomEventCopyLinkInfo
+                                             image:AssetImages.linkIcon.image
+                                          duration:2.0
+                                          position:ToastPositionBottom
+                                  additionalMargin:0.0];
+                }
+                else
+                {
+                    MXLogDebug(@"[RoomSettingsViewController] Copy room URL failed. Room URL is nil");
+                }
+            }
+            
+        }]];
         
         // The user can only delete alias they has created, even if the Admin has set it as canonical.
         // So, let the server answer if it's possible to delete an alias.
-        [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n delete]
+        [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n delete]
                                                          style:UIAlertActionStyleDefault
                                                        handler:^(UIAlertAction * action) {
 
@@ -1065,7 +1029,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
 
                                                        }]];
         
-        [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+        [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                          style:UIAlertActionStyleCancel
                                                        handler:^(UIAlertAction * action) {
                                                            
@@ -1133,36 +1097,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             self->actualDirectoryVisibilityRequest = nil;
         }
     }];
-}
-
-- (void)refreshRelatedGroups
-{
-    // Refresh here the related communities list.
-    [relatedGroups removeAllObjects];
-    [relatedGroups addObjectsFromArray:mxRoomState.relatedGroups];
-    NSArray *removedCommunities = updatedItemsDict[kRoomSettingsRemovedRelatedGroupKey];
-    if (removedCommunities.count)
-    {
-        for (NSUInteger index = 0; index < relatedGroups.count;)
-        {
-            NSString *groupId = relatedGroups[index];
-            
-            // Check whether the user did not remove it
-            if ([removedCommunities indexOfObject:groupId] != NSNotFound)
-            {
-                [relatedGroups removeObjectAtIndex:index];
-            }
-            else
-            {
-                index++;
-            }
-        }
-    }
-    NSArray *communities = updatedItemsDict[kRoomSettingsNewRelatedGroupKey];
-    if (communities)
-    {
-        [relatedGroups addObjectsFromArray:communities];
-    }
 }
 
 #pragma mark - UITextViewDelegate
@@ -1326,18 +1260,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             addAddressTextField.text = nil;
         }
     }
-    else if (textField == addGroupTextField)
-    {
-        // Dismiss the keyboard
-        [addGroupTextField resignFirstResponder];
-        
-        NSString *groupId = addGroupTextField.text;
-        if (!groupId.length || [self addCommunity:groupId])
-        {
-            // Reset the input field
-            addGroupTextField.text = nil;
-        }
-    }
     
     return YES;
 }
@@ -1383,7 +1305,14 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     }
     else
     {
-        [self withdrawViewControllerAnimated:YES completion:nil];
+        if (self.delegate)
+        {
+            [self.delegate roomSettingsViewControllerDidCancel:self];
+        }
+        else
+        {
+            [self withdrawViewControllerAnimated:YES completion:nil];
+        }
     }
 }
 
@@ -1395,7 +1324,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     
     currentAlert = [UIAlertController alertControllerWithTitle:nil message:message preferredStyle:UIAlertControllerStyleAlert];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                      style:UIAlertActionStyleCancel
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -1892,52 +1821,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                 
                 return;
             }
-            
-            // Related groups
-            if (updatedItemsDict[kRoomSettingsNewRelatedGroupKey] || updatedItemsDict[kRoomSettingsRemovedRelatedGroupKey])
-            {
-                [self refreshRelatedGroups];
-                
-                pendingOperation = [mxRoom setRelatedGroups:relatedGroups success:^{
-                    
-                    if (weakSelf)
-                    {
-                        typeof(self) self = weakSelf;
-                        
-                        self->pendingOperation = nil;
-                        
-                        [self->updatedItemsDict removeObjectForKey:kRoomSettingsNewRelatedGroupKey];
-                        [self->updatedItemsDict removeObjectForKey:kRoomSettingsRemovedRelatedGroupKey];
-                        
-                        [self onSave:nil];
-                    }
-                    
-                } failure:^(NSError *error) {
-                    
-                    MXLogDebug(@"[RoomSettingsViewController] Update room communities failed");
-                    
-                    if (weakSelf)
-                    {
-                        typeof(self) self = weakSelf;
-                        
-                        self->pendingOperation = nil;
-                        
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            
-                            NSString* message = error.localizedDescription;
-                            if (!message.length)
-                            {
-                                message = [VectorL10n roomDetailsFailToUpdateRoomCommunities];
-                            }
-                            [self onSaveFailed:message withKeys:@[kRoomSettingsNewRelatedGroupKey,kRoomSettingsRemovedRelatedGroupKey]];
-                            
-                        });
-                    }
-                    
-                }];
-                
-                return;
-            }
         }
         
         // Update here other room settings
@@ -2131,7 +2014,14 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     
     [self stopActivityIndicator];
     
-    [self withdrawViewControllerAnimated:YES completion:nil];
+    if (self.delegate)
+    {
+        [self.delegate roomSettingsViewControllerDidComplete:self];
+    }
+    else
+    {
+        [self withdrawViewControllerAnimated:YES completion:nil];
+    }
 }
 
 #pragma mark - UITableViewDataSource
@@ -2192,7 +2082,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     
     // Check user's power level to know which settings are editable.
     MXRoomPowerLevels *powerLevels = [mxRoomState powerLevels];
-    NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
+    NSInteger oneSelfPowerLevel = [mxRoomState powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
     
     // general settings
     if (section == SECTION_TAG_MAIN)
@@ -2239,7 +2129,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         {
             MXKTableViewCellWithLabelAndMXKImageView *roomPhotoCell = [tableView dequeueReusableCellWithIdentifier:[MXKTableViewCellWithLabelAndMXKImageView defaultReuseIdentifier] forIndexPath:indexPath];
             
-            roomPhotoCell.mxkLabelLeadingConstraint.constant = roomPhotoCell.vc_separatorInset.left;
+            roomPhotoCell.mxkLabelLeadingConstraint.constant = tableView.vc_separatorInset.left;
             roomPhotoCell.mxkImageViewTrailingConstraint.constant = 10;
             
             roomPhotoCell.mxkImageViewWidthConstraint.constant = roomPhotoCell.mxkImageViewHeightConstraint.constant = 30;
@@ -2283,7 +2173,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         {
             TableViewCellWithLabelAndLargeTextView *roomTopicCell = [tableView dequeueReusableCellWithIdentifier:kRoomSettingsTopicCellViewIdentifier forIndexPath:indexPath];
             
-            roomTopicCell.labelLeadingConstraint.constant = roomTopicCell.vc_separatorInset.left;
+            roomTopicCell.labelLeadingConstraint.constant = tableView.vc_separatorInset.left;
             
             roomTopicCell.label.text = [VectorL10n roomDetailsTopic];
             
@@ -2315,7 +2205,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         {
             MXKTableViewCellWithLabelAndTextField *roomNameCell = [tableView dequeueReusableCellWithIdentifier:kRoomSettingsNameCellViewIdentifier forIndexPath:indexPath];
             
-            roomNameCell.mxkLabelLeadingConstraint.constant = roomNameCell.vc_separatorInset.left;
+            roomNameCell.mxkLabelLeadingConstraint.constant = tableView.vc_separatorInset.left;
             roomNameCell.mxkTextFieldLeadingConstraint.constant = 16;
             roomNameCell.mxkTextFieldTrailingConstraint.constant = 15;
             
@@ -2364,7 +2254,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             {
                 //  show a muti-checkbox cell
                 roomTagCell = [tableView dequeueReusableCellWithIdentifier:[TableViewCellWithCheckBoxes defaultReuseIdentifier] forIndexPath:indexPath];
-                roomTagCell.mainContainerLeadingConstraint.constant = roomTagCell.vc_separatorInset.left;
+                roomTagCell.mainContainerLeadingConstraint.constant = tableView.vc_separatorInset.left;
                 roomTagCell.checkBoxesNumber = 2;
                 roomTagCell.allowsMultipleSelection = NO;
                 roomTagCell.delegate = self;
@@ -2425,22 +2315,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                 cell = favoriteCell;
             }
         }
-        else if (row == ROOM_SETTINGS_MAIN_SECTION_ROW_LEAVE)
-        {
-            MXKTableViewCellWithButton *leaveCell = [tableView dequeueReusableCellWithIdentifier:[MXKTableViewCellWithButton defaultReuseIdentifier] forIndexPath:indexPath];
-            
-            NSString* title = [VectorL10n leave];
-            
-            [leaveCell.mxkButton setTitle:title forState:UIControlStateNormal];
-            [leaveCell.mxkButton setTitle:title forState:UIControlStateHighlighted];
-            [leaveCell.mxkButton setTintColor:ThemeService.shared.theme.tintColor];
-            leaveCell.mxkButton.titleLabel.font = [UIFont systemFontOfSize:17];
-            
-            [leaveCell.mxkButton  removeTarget:self action:nil forControlEvents:UIControlEventTouchUpInside];
-            [leaveCell.mxkButton addTarget:self action:@selector(onLeave:) forControlEvents:UIControlEventTouchUpInside];
-            
-            cell = leaveCell;
-        }
     }
     else if (section == SECTION_TAG_ACCESS)
     {
@@ -2489,12 +2363,10 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
             cell.textLabel.text = [VectorL10n roomDetailsAccessSectionNoAddressWarning];
         }
-        else
+        else if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ACCESS)
         {
-            TableViewCellWithCheckBoxAndLabel *roomAccessCell = [tableView dequeueReusableCellWithIdentifier:[TableViewCellWithCheckBoxAndLabel defaultReuseIdentifier] forIndexPath:indexPath];
-            
-            roomAccessCell.checkBoxLeadingConstraint.constant = roomAccessCell.vc_separatorInset.left;
-            
+            TitleAndRightDetailTableViewCell *roomAccessCell = [tableView dequeueReusableCellWithIdentifier:[TitleAndRightDetailTableViewCell defaultReuseIdentifier] forIndexPath:indexPath];
+                        
             // Retrieve the potential updated values for joinRule and guestAccess
             NSString *joinRule = updatedItemsDict[kRoomSettingsJoinRuleKey];
             NSString *guestAccess = updatedItemsDict[kRoomSettingsGuestAccessKey];
@@ -2509,45 +2381,43 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                 guestAccess = mxRoomState.guestAccess;
             }
             
-            if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_INVITED_ONLY)
+            roomAccessCell.titleLabel.text = [VectorL10n roomDetailsAccessRowTitle];
+            NSString *access = VectorL10n.private;
+            if ([joinRule isEqualToString:kMXRoomJoinRulePublic])
             {
-                roomAccessCell.label.text = [VectorL10n roomDetailsAccessSectionInvitedOnly];
-                
-                roomAccessCell.enabled = ([joinRule isEqualToString:kMXRoomJoinRuleInvite]);
-                
-                accessInvitedOnlyTickCell = roomAccessCell;
+                access = VectorL10n.public;
             }
-            else if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE_APART_FROM_GUEST)
+            else if ([joinRule isEqualToString:kMXRoomJoinRuleRestricted])
             {
-                if (mxRoom.isDirect)
-                {
-                    roomAccessCell.label.text = [VectorL10n roomDetailsAccessSectionAnyoneApartFromGuestForDm];
-                }
-                else
-                {
-                    roomAccessCell.label.text = [VectorL10n roomDetailsAccessSectionAnyoneApartFromGuest];
-                }
-                
-                roomAccessCell.enabled = ([joinRule isEqualToString:kMXRoomJoinRulePublic] && [guestAccess isEqualToString:kMXRoomGuestAccessForbidden]);
-                
-                accessAnyoneApartGuestTickCell = roomAccessCell;
+                access = VectorL10n.createRoomTypeRestricted;
             }
-            else if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE)
-            {
-                if (mxRoom.isDirect)
-                {
-                    roomAccessCell.label.text = [VectorL10n roomDetailsAccessSectionAnyoneForDm];
-                }
-                else
-                {
-                    roomAccessCell.label.text = [VectorL10n roomDetailsAccessSectionAnyone];
-                }
-                
-                roomAccessCell.enabled = ([joinRule isEqualToString:kMXRoomJoinRulePublic] && [guestAccess isEqualToString:kMXRoomGuestAccessCanJoin]);
-                
-                accessAnyoneTickCell = roomAccessCell;
-            }
+            roomAccessCell.detailLabel.text = access;
+
+            // Check whether the user can change this option
+            roomAccessCell.userInteractionEnabled = (oneSelfPowerLevel >= [powerLevels minimumPowerLevelForSendingEventAsStateEvent:kMXEventTypeStringRoomJoinRules]);
+
+            cell = roomAccessCell;
+        }
+        else
+        {
+            TableViewCellWithCheckBoxAndLabel *roomAccessCell = [tableView dequeueReusableCellWithIdentifier:[TableViewCellWithCheckBoxAndLabel defaultReuseIdentifier] forIndexPath:indexPath];
             
+            roomAccessCell.checkBoxLeadingConstraint.constant = tableView.vc_separatorInset.left;
+            
+            // Retrieve the potential updated values for joinRule and guestAccess
+            NSString *joinRule = updatedItemsDict[kRoomSettingsJoinRuleKey];
+            NSString *guestAccess = updatedItemsDict[kRoomSettingsGuestAccessKey];
+            
+            // Use the actual values if no change is pending
+            if (!joinRule)
+            {
+                joinRule = mxRoomState.joinRule;
+            }
+            if (!guestAccess)
+            {
+                guestAccess = mxRoomState.guestAccess;
+            }
+
             // Check whether the user can change this option
             roomAccessCell.userInteractionEnabled = (oneSelfPowerLevel >= [powerLevels minimumPowerLevelForSendingEventAsStateEvent:kMXEventTypeStringRoomJoinRules]);
             roomAccessCell.checkBox.alpha = roomAccessCell.userInteractionEnabled ? 1.0f : 0.5f;
@@ -2555,11 +2425,59 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             cell = roomAccessCell;
         }
     }
+    else if (section == SECTION_TAG_PROMOTION)
+    {
+        if (row == ROOM_SETTINGS_ROOM_ACCESS_DIRECTORY_VISIBILITY)
+        {
+            MXKTableViewCellWithLabelAndSwitch *directoryToggleCell = [self getLabelAndSwitchCell:tableView forIndexPath:indexPath];
+            
+            if (mxRoom.isDirect)
+            {
+                directoryToggleCell.mxkLabel.text = [VectorL10n roomDetailsAccessSectionDirectoryToggleForDm];
+            }
+            else
+            {
+                directoryToggleCell.mxkLabel.text = [VectorL10n roomDetailsAccessSectionDirectoryToggle];
+            }
+            
+            [directoryToggleCell.mxkSwitch addTarget:self action:@selector(toggleDirectoryVisibility:) forControlEvents:UIControlEventValueChanged];
+            
+            if (updatedItemsDict[kRoomSettingsDirectoryKey])
+            {
+                directoryToggleCell.mxkSwitch.on = ((NSNumber*) updatedItemsDict[kRoomSettingsDirectoryKey]).boolValue;
+            }
+            else
+            {
+                // Use the last retrieved value if any
+                directoryToggleCell.mxkSwitch.on = actualDirectoryVisibility ? [actualDirectoryVisibility isEqualToString:kMXRoomDirectoryVisibilityPublic] : NO;
+            }
+            
+            // Check whether the user can change this option
+            directoryToggleCell.mxkSwitch.enabled = (oneSelfPowerLevel >= powerLevels.stateDefault);
+            
+            // Store the switch to be able to update it
+            directoryVisibilitySwitch = directoryToggleCell.mxkSwitch;
+            
+            cell = directoryToggleCell;
+        }
+        else if (row == ROOM_SETTINGS_ROOM_PROMOTE_SECTION_ROW_SUGGEST)
+        {
+            TitleAndRightDetailTableViewCell *roomSuggestionCell = [tableView dequeueReusableCellWithIdentifier:[TitleAndRightDetailTableViewCell defaultReuseIdentifier] forIndexPath:indexPath];
+                        
+            roomSuggestionCell.titleLabel.text = [VectorL10n roomDetailsPromoteRoomSuggestTitle];
+            roomSuggestionCell.detailLabel.text = [self.mainSession.spaceService directParentIdsOfRoomWithId:self.roomId whereRoomIsSuggested:YES].count ? [VectorL10n on] : [VectorL10n off];
+
+            // Check whether the user can change this option
+            roomSuggestionCell.userInteractionEnabled = (oneSelfPowerLevel >= [powerLevels minimumPowerLevelForSendingEventAsStateEvent:kMXEventTypeStringRoomJoinRules]);
+
+            cell = roomSuggestionCell;
+        }
+    }
     else if (section == SECTION_TAG_HISTORY)
     {
         TableViewCellWithCheckBoxAndLabel *historyVisibilityCell = [tableView dequeueReusableCellWithIdentifier:[TableViewCellWithCheckBoxAndLabel defaultReuseIdentifier] forIndexPath:indexPath];
         
-        historyVisibilityCell.checkBoxLeadingConstraint.constant = historyVisibilityCell.vc_separatorInset.left;
+        historyVisibilityCell.checkBoxLeadingConstraint.constant = tableView.vc_separatorInset.left;
         
         // Retrieve first the potential updated value for history visibility
         NSString *visibility = updatedItemsDict[kRoomSettingsHistoryVisibilityKey];
@@ -2623,13 +2541,13 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             NSString *currentValue = (addAddressTextField ? addAddressTextField.text : nil);
             
             addAddressCell.mxkLabelLeadingConstraint.constant = 0;
-            addAddressCell.mxkTextFieldLeadingConstraint.constant = addAddressCell.vc_separatorInset.left;
+            addAddressCell.mxkTextFieldLeadingConstraint.constant = tableView.vc_separatorInset.left;
             addAddressCell.mxkTextFieldTrailingConstraint.constant = 15;
             
             addAddressCell.mxkLabel.text = nil;
             
             addAddressCell.accessoryType = UITableViewCellAccessoryNone;
-            addAddressCell.accessoryView = [[UIImageView alloc] initWithImage:[[UIImage imageNamed:@"plus_icon"] vc_tintedImageUsingColor:ThemeService.shared.theme.textPrimaryColor]];
+            addAddressCell.accessoryView = [[UIImageView alloc] initWithImage:[AssetImages.plusIcon.image vc_tintedImageUsingColor:ThemeService.shared.theme.textPrimaryColor]];
             
             addAddressTextField = addAddressCell.mxkTextField;
             addAddressTextField.placeholder = [VectorL10n roomDetailsNewAddressPlaceholder:self.mainSession.matrixRestClient.homeserverSuffix];
@@ -2706,70 +2624,12 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                 {
                     if ([alias isEqualToString:canonicalAlias])
                     {
-                        addressCell.accessoryView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"main_alias_icon"]];
+                        addressCell.accessoryView = [[UIImageView alloc] initWithImage:AssetImages.mainAliasIcon.image];
                     }
                 }
             }
             
             cell = addressCell;
-        }
-    }
-    else if (section == SECTION_TAG_FLAIR)
-    {
-        if (row == ROOM_SETTINGS_RELATED_GROUPS_NEW_GROUP)
-        {
-            MXKTableViewCellWithLabelAndTextField *addCommunityCell = [tableView dequeueReusableCellWithIdentifier:kRoomSettingsNewCommunityCellViewIdentifier forIndexPath:indexPath];
-
-            // Retrieve the current edited value if any
-            NSString *currentValue = (addGroupTextField ? addGroupTextField.text : nil);
-
-            addCommunityCell.mxkLabelLeadingConstraint.constant = 0;
-            addCommunityCell.mxkTextFieldLeadingConstraint.constant = addCommunityCell.vc_separatorInset.left;
-            addCommunityCell.mxkTextFieldTrailingConstraint.constant = 15;
-
-            addCommunityCell.mxkLabel.text = nil;
-
-            addCommunityCell.accessoryType = UITableViewCellAccessoryNone;
-            addCommunityCell.accessoryView = [[UIImageView alloc] initWithImage:[[UIImage imageNamed:@"plus_icon"] vc_tintedImageUsingColor:ThemeService.shared.theme.textPrimaryColor]];
-
-            addGroupTextField = addCommunityCell.mxkTextField;
-            addGroupTextField.placeholder = [VectorL10n roomDetailsNewFlairPlaceholder:self.mainSession.matrixRestClient.homeserverSuffix];
-            addGroupTextField.attributedPlaceholder = [[NSAttributedString alloc]
-                                                       initWithString:addGroupTextField.placeholder
-                                                       attributes:@{NSForegroundColorAttributeName: ThemeService.shared.theme.placeholderTextColor}];
-            addGroupTextField.userInteractionEnabled = YES;
-            addGroupTextField.text = currentValue;
-            addGroupTextField.textColor = ThemeService.shared.theme.textSecondaryColor;
-
-            addGroupTextField.tintColor = ThemeService.shared.theme.tintColor;
-            addGroupTextField.font = [UIFont systemFontOfSize:17];
-            addGroupTextField.borderStyle = UITextBorderStyleNone;
-            addGroupTextField.textAlignment = NSTextAlignmentLeft;
-
-            addGroupTextField.autocorrectionType = UITextAutocorrectionTypeNo;
-            addGroupTextField.spellCheckingType = UITextSpellCheckingTypeNo;
-            addGroupTextField.delegate = self;
-
-            cell = addCommunityCell;
-        }
-        else if (row >= ROOM_SETTINGS_RELATED_GROUPS_OFFSET)
-        {
-            UITableViewCell *communityCell = [tableView dequeueReusableCellWithIdentifier:kRoomSettingsAddressCellViewIdentifier forIndexPath:indexPath];
-
-            communityCell.textLabel.font = [UIFont systemFontOfSize:16];
-            communityCell.textLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
-            communityCell.textLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
-            communityCell.accessoryView = nil;
-            communityCell.accessoryType = UITableViewCellAccessoryNone;
-            communityCell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-            NSInteger index = row - ROOM_SETTINGS_RELATED_GROUPS_OFFSET;
-            
-            if (index < relatedGroups.count)
-            {
-                communityCell.textLabel.text = relatedGroups[index];
-            }
-            cell = communityCell;
         }
     }
     else if (section == SECTION_TAG_BANNED_USERS)
@@ -2924,11 +2784,11 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     return cell;
 }
 
-- (MXKTableViewCellWithLabelAndSwitch*)getLabelAndSwitchCell:(UITableView*)tableview forIndexPath:(NSIndexPath *)indexPath
+- (MXKTableViewCellWithLabelAndSwitch*)getLabelAndSwitchCell:(UITableView*)tableView forIndexPath:(NSIndexPath *)indexPath
 {
-    MXKTableViewCellWithLabelAndSwitch *cell = [tableview dequeueReusableCellWithIdentifier:[MXKTableViewCellWithLabelAndSwitch defaultReuseIdentifier] forIndexPath:indexPath];
+    MXKTableViewCellWithLabelAndSwitch *cell = [tableView dequeueReusableCellWithIdentifier:[MXKTableViewCellWithLabelAndSwitch defaultReuseIdentifier] forIndexPath:indexPath];
     
-    cell.mxkLabelLeadingConstraint.constant = cell.vc_separatorInset.left;
+    cell.mxkLabelLeadingConstraint.constant = tableView.vc_separatorInset.left;
     cell.mxkSwitchTrailingConstraint.constant = 15;
     
     cell.mxkLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
@@ -3000,129 +2860,8 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         else if (section == SECTION_TAG_ACCESS)
         {
             BOOL isUpdated = NO;
-            
-            if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_INVITED_ONLY)
-            {
-                // Ignore the selection if the option is already enabled
-                if (! accessInvitedOnlyTickCell.isEnabled)
-                {
-                    // Enable this option
-                    accessInvitedOnlyTickCell.enabled = YES;
-                    // Disable other options
-                    accessAnyoneApartGuestTickCell.enabled = NO;
-                    accessAnyoneTickCell.enabled = NO;
-                    
-                    // Check the actual option
-                    if ([mxRoomState.joinRule isEqualToString:kMXRoomJoinRuleInvite])
-                    {
-                        // No change on room access
-                        [updatedItemsDict removeObjectForKey:kRoomSettingsJoinRuleKey];
-                        [updatedItemsDict removeObjectForKey:kRoomSettingsGuestAccessKey];
-                    }
-                    else
-                    {
-                        updatedItemsDict[kRoomSettingsJoinRuleKey] = kMXRoomJoinRuleInvite;
-                        
-                        // Update guest access to allow guest on invitation.
-                        // Note: if guest_access is "forbidden" here, guests cannot join this room even if explicitly invited.
-                        if ([mxRoomState.guestAccess isEqualToString:kMXRoomGuestAccessCanJoin])
-                        {
-                            [updatedItemsDict removeObjectForKey:kRoomSettingsGuestAccessKey];
-                        }
-                        else
-                        {
-                            updatedItemsDict[kRoomSettingsGuestAccessKey] = kMXRoomGuestAccessCanJoin;
-                        }
-                    }
-                    
-                    isUpdated = YES;
-                }
-            }
-            else if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE_APART_FROM_GUEST)
-            {
-                // Ignore the selection if the option is already enabled
-                if (! accessAnyoneApartGuestTickCell.isEnabled)
-                {
-                    // Enable this option
-                    accessAnyoneApartGuestTickCell.enabled = YES;
-                    // Disable other options
-                    accessInvitedOnlyTickCell.enabled = NO;
-                    accessAnyoneTickCell.enabled = NO;
-                    
-                    // Check the actual option
-                    if ([mxRoomState.joinRule isEqualToString:kMXRoomJoinRulePublic] && [mxRoomState.guestAccess isEqualToString:kMXRoomGuestAccessForbidden])
-                    {
-                        // No change on room access
-                        [updatedItemsDict removeObjectForKey:kRoomSettingsJoinRuleKey];
-                        [updatedItemsDict removeObjectForKey:kRoomSettingsGuestAccessKey];
-                    }
-                    else
-                    {
-                        if ([mxRoomState.joinRule isEqualToString:kMXRoomJoinRulePublic])
-                        {
-                            [updatedItemsDict removeObjectForKey:kRoomSettingsJoinRuleKey];
-                        }
-                        else
-                        {
-                            updatedItemsDict[kRoomSettingsJoinRuleKey] = kMXRoomJoinRulePublic;
-                        }
-                        
-                        if ([mxRoomState.guestAccess isEqualToString:kMXRoomGuestAccessForbidden])
-                        {
-                            [updatedItemsDict removeObjectForKey:kRoomSettingsGuestAccessKey];
-                        }
-                        else
-                        {
-                            updatedItemsDict[kRoomSettingsGuestAccessKey] = kMXRoomGuestAccessForbidden;
-                        }
-                    }
-                    
-                    isUpdated = YES;
-                }
-            }
-            else if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ANYONE)
-            {
-                // Ignore the selection if the option is already enabled
-                if (! accessAnyoneTickCell.isEnabled)
-                {
-                    // Enable this option
-                    accessAnyoneTickCell.enabled = YES;
-                    // Disable other options
-                    accessInvitedOnlyTickCell.enabled = NO;
-                    accessAnyoneApartGuestTickCell.enabled = NO;
-                    
-                    // Check the actual option
-                    if ([mxRoomState.joinRule isEqualToString:kMXRoomJoinRulePublic] && [mxRoomState.guestAccess isEqualToString:kMXRoomGuestAccessCanJoin])
-                    {
-                        // No change on room access
-                        [updatedItemsDict removeObjectForKey:kRoomSettingsJoinRuleKey];
-                        [updatedItemsDict removeObjectForKey:kRoomSettingsGuestAccessKey];
-                    }
-                    else
-                    {
-                        if ([mxRoomState.joinRule isEqualToString:kMXRoomJoinRulePublic])
-                        {
-                            [updatedItemsDict removeObjectForKey:kRoomSettingsJoinRuleKey];
-                        }
-                        else
-                        {
-                            updatedItemsDict[kRoomSettingsJoinRuleKey] = kMXRoomJoinRulePublic;
-                        }
-                        
-                        if ([mxRoomState.guestAccess isEqualToString:kMXRoomGuestAccessCanJoin])
-                        {
-                            [updatedItemsDict removeObjectForKey:kRoomSettingsGuestAccessKey];
-                        }
-                        else
-                        {
-                            updatedItemsDict[kRoomSettingsGuestAccessKey] = kMXRoomGuestAccessCanJoin;
-                        }
-                    }
-                    
-                    isUpdated = YES;
-                }
-            }
-            else if (row == ROOM_SETTINGS_ROOM_ACCESS_MISSING_ADDRESS_WARNING)
+
+            if (row == ROOM_SETTINGS_ROOM_ACCESS_MISSING_ADDRESS_WARNING)
             {
                 // Scroll to room addresses section
                 NSIndexPath *addressIndexPath = [_tableViewSections exactIndexPathForRowTag:0 sectionTag:SECTION_TAG_ADDRESSES];
@@ -3139,12 +2878,23 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                     }
                 }
             }
+            else if (row == ROOM_SETTINGS_ROOM_ACCESS_SECTION_ROW_ACCESS)
+            {
+                [self showRoomAccessFlow];
+            }
             
             if (isUpdated)
             {
                 [self updateSections];
                 
                 [self getNavigationItem].rightBarButtonItem.enabled = (updatedItemsDict.count != 0);
+            }
+        }
+        else if (section == SECTION_TAG_PROMOTION)
+        {
+            if (row == ROOM_SETTINGS_ROOM_PROMOTE_SECTION_ROW_SUGGEST)
+            {
+                [self showSuggestToSpaceMembers];
             }
         }
         else if (section == SECTION_TAG_HISTORY)
@@ -3202,18 +2952,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                 });
             }
         }
-        else if (section == SECTION_TAG_FLAIR)
-        {
-            if (row == ROOM_SETTINGS_RELATED_GROUPS_NEW_GROUP)
-            {
-                NSString *groupId = addGroupTextField.text;
-                if (!groupId.length || [self addCommunity:groupId])
-                {
-                    // Reset the input field
-                    addGroupTextField.text = nil;
-                }
-            }
-        }
         else if (section == SECTION_TAG_BANNED_USERS)
         {
             // Show the RoomMemberDetailsViewController on this member so that
@@ -3259,28 +2997,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
             completionHandler(YES);
         }];
         removeAddressAction.backgroundColor = ThemeService.shared.theme.headerBackgroundColor;
-        removeAddressAction.image = [[UIImage imageNamed:@"remove_icon"] vc_notRenderedImage];
-        
-        // Create swipe action configuration
-        
-        NSArray<UIContextualAction*> *actions = @[
-            removeAddressAction
-        ];
-        
-        UISwipeActionsConfiguration *swipeActionConfiguration = [UISwipeActionsConfiguration configurationWithActions:actions];
-        swipeActionConfiguration.performsFirstActionWithFullSwipe = NO;
-        return swipeActionConfiguration;
-    }
-    else if (section == SECTION_TAG_FLAIR && row >= ROOM_SETTINGS_RELATED_GROUPS_OFFSET)
-    {
-        UIContextualAction *removeAddressAction = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive
-                                                                                          title:@"    "
-                                                                                        handler:^(UIContextualAction * _Nonnull action, __kindof UIView * _Nonnull sourceView, void (^ _Nonnull completionHandler)(BOOL)) {
-            [self removeCommunityAtIndexPath:indexPath];
-            completionHandler(YES);
-        }];
-        removeAddressAction.backgroundColor = ThemeService.shared.theme.headerBackgroundColor;
-        removeAddressAction.image = [[UIImage imageNamed:@"remove_icon"] vc_notRenderedImage];
+        removeAddressAction.image = [AssetImages.removeIcon.image vc_notRenderedImage];
         
         // Create swipe action configuration
         
@@ -3309,7 +3026,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                        message:[VectorL10n roomDetailsHistorySectionPromptMsg]
                                                 preferredStyle:UIAlertControllerStyleAlert];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                      style:UIAlertActionStyleCancel
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -3321,7 +3038,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                        
                                                    }]];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n continue]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n continue]
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -3375,7 +3092,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     {
         // Check user's power level to know whether the user is allowed to set the main address
         MXRoomPowerLevels *powerLevels = [mxRoomState powerLevels];
-        NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
+        NSInteger oneSelfPowerLevel = [mxRoomState powerLevelOfUserWithUserID:self.mainSession.myUser.userId];
 
         if (oneSelfPowerLevel >= [powerLevels minimumPowerLevelForSendingEventAsStateEvent:kMXEventTypeStringRoomAliases])
         {
@@ -3397,7 +3114,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                        message:[VectorL10n roomDetailsAddressesDisableMainAddressPromptMsg]
                                                 preferredStyle:UIAlertControllerStyleAlert];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                      style:UIAlertActionStyleCancel
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -3409,7 +3126,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                        
                                                    }]];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n continue]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n continue]
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -3448,76 +3165,10 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
 
 - (void)roomMemberDetailsViewController:(MXKRoomMemberDetailsViewController *)roomMemberDetailsViewController startChatWithMemberId:(NSString *)matrixId completion:(void (^)(void))completion
 {
-    [[AppDelegate theDelegate] createDirectChatWithUserId:matrixId completion:completion];
+    [[AppDelegate theDelegate] showNewDirectChat:matrixId withMatrixSession:mxRoom.mxSession completion:completion];
 }
 
 #pragma mark - actions
-
-- (void)onLeave:(id)sender
-{
-    // Prompt user before leaving the room
-    __weak typeof(self) weakSelf = self;
-    
-    [currentAlert dismissViewControllerAnimated:NO completion:nil];
-    
-    NSString *title, *message;
-    if ([self.mainSession roomWithRoomId:self.roomId].isDirect)
-    {
-        title = [VectorL10n roomParticipantsLeavePromptTitleForDm];
-        message = [VectorL10n roomParticipantsLeavePromptMsgForDm];
-    }
-    else
-    {
-        title = [VectorL10n roomParticipantsLeavePromptTitle];
-        message = [VectorL10n roomParticipantsLeavePromptMsg];
-    }
-    
-    currentAlert = [UIAlertController alertControllerWithTitle:title
-                                                       message:message
-                                                preferredStyle:UIAlertControllerStyleAlert];
-    
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
-                                                     style:UIAlertActionStyleCancel
-                                                   handler:^(UIAlertAction * action) {
-                                                       
-                                                       if (weakSelf)
-                                                       {
-                                                           typeof(self) self = weakSelf;
-                                                           self->currentAlert = nil;
-                                                       }
-                                                       
-                                                   }]];
-    
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n leave]
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction * action) {
-                                                       
-                                                       if (weakSelf)
-                                                       {
-                                                           typeof(self) self = weakSelf;
-                                                           self->currentAlert = nil;
-                                                           
-                                                           [self startActivityIndicator];
-                                                           [self->mxRoom leave:^{
-                                                               
-                                                               [[LegacyAppDelegate theDelegate] restoreInitialDisplay:nil];
-                                                               
-                                                           } failure:^(NSError *error) {
-                                                               
-                                                               [self stopActivityIndicator];
-                                                               
-                                                               MXLogDebug(@"[RoomSettingsViewController] Leave room failed");
-                                                               // Alert user
-                                                               [[AppDelegate theDelegate] showErrorAsAlert:error];
-                                                               
-                                                           }];
-                                                       }
-                                                       
-                                                   }]];
-    
-    [currentAlert mxk_setAccessibilityIdentifier:@"RoomSettingsVCLeaveAlert"];
-    [self presentViewController:currentAlert animated:YES completion:nil];
-}
 
 - (void)onRoomAvatarTap:(UITapGestureRecognizer *)recognizer
 {
@@ -3665,6 +3316,28 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     [self getNavigationItem].rightBarButtonItem.enabled = (updatedItemsDict.count != 0);
 }
 
+- (void)showRoomAccessFlow
+{
+    MXRoom *room = [self.mainSession roomWithRoomId:self.roomId];
+
+    if (room) {
+        roomAccessPresenter = [[RoomAccessCoordinatorBridgePresenter alloc] initWithRoom:room parentSpaceId:self.parentSpaceId];
+        roomAccessPresenter.delegate = self;
+        [roomAccessPresenter presentFrom:self animated:YES];
+    }
+}
+
+- (void)showSuggestToSpaceMembers
+{
+    MXRoom *room = [self.mainSession roomWithRoomId:self.roomId];
+
+    if (room) {
+        roomSuggestionPresenter = [[RoomSuggestionCoordinatorBridgePresenter alloc] initWithRoom:room];
+        roomSuggestionPresenter.delegate = self;
+        [roomSuggestionPresenter presentFrom:self animated:YES];
+    }
+}
+
 - (void)setRoomAliasAsMainAddress:(NSString *)alias
 {
     NSString *currentCanonicalAlias = mxRoomState.canonicalAlias;
@@ -3695,20 +3368,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
     {
         NSString *alias = roomAddresses[row];
         [self removeRoomAlias:alias];
-    }
-}
-
-- (void)removeCommunityAtIndexPath:(NSIndexPath *)indexPath
-{
-    indexPath = [_tableViewSections tagsIndexPathFromTableViewIndexPath:indexPath];
-    NSInteger row = indexPath.row;
-    
-    NSInteger index = row - ROOM_SETTINGS_RELATED_GROUPS_OFFSET;
-    
-    if (index < relatedGroups.count)
-    {
-        NSString *groupId = relatedGroups[index];
-        [self removeCommunity:groupId];
     }
 }
 
@@ -3765,36 +3424,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
         
         [self getNavigationItem].rightBarButtonItem.enabled = (updatedItemsDict.count != 0);
     }
-}
-
-- (void)removeCommunity:(NSString*)groupId
-{
-    // Check whether the alias has just been added
-    NSMutableArray<NSString *> *addedGroup = updatedItemsDict[kRoomSettingsNewRelatedGroupKey];
-    if (addedGroup && [addedGroup indexOfObject:groupId] != NSNotFound)
-    {
-        [addedGroup removeObject:groupId];
-        
-        if (!addedGroup.count)
-        {
-            [updatedItemsDict removeObjectForKey:kRoomSettingsNewRelatedGroupKey];
-        }
-    }
-    else
-    {
-        NSMutableArray<NSString *> *removedGroup = updatedItemsDict[kRoomSettingsRemovedRelatedGroupKey];
-        if (!removedGroup)
-        {
-            removedGroup = [NSMutableArray array];
-            updatedItemsDict[kRoomSettingsRemovedRelatedGroupKey] = removedGroup;
-        }
-        
-        [removedGroup addObject:groupId];
-    }
-    
-    [self updateSections];
-    
-    [self getNavigationItem].rightBarButtonItem.enabled = (updatedItemsDict.count != 0);
 }
 
 - (BOOL)addRoomAlias:(NSString*)roomAlias
@@ -3860,7 +3489,7 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                        message:alertMsg
                                                 preferredStyle:UIAlertControllerStyleAlert];
     
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
+    [currentAlert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok]
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction * action) {
                                                        
@@ -3873,71 +3502,6 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
                                                    }]];
     
     [currentAlert mxk_setAccessibilityIdentifier:@"RoomSettingsVCAddAliasAlert"];
-    [self presentViewController:currentAlert animated:YES completion:nil];
-    
-    return NO;
-}
-
-- (BOOL)addCommunity:(NSString*)groupId
-{
-    // Check whether the provided id is valid
-    if ([MXTools isMatrixGroupIdentifier:groupId])
-    {
-        // Check whether this group has just been deleted
-        NSMutableArray<NSString *> *removedGroups = updatedItemsDict[kRoomSettingsRemovedRelatedGroupKey];
-        if (removedGroups && [removedGroups indexOfObject:groupId] != NSNotFound)
-        {
-            [removedGroups removeObject:groupId];
-            
-            if (!removedGroups.count)
-            {
-                [updatedItemsDict removeObjectForKey:kRoomSettingsRemovedRelatedGroupKey];
-            }
-        }
-        // Check whether this alias is not already defined for this room
-        else if ([relatedGroups indexOfObject:groupId] == NSNotFound)
-        {
-            NSMutableArray<NSString *> *addedGroup = updatedItemsDict[kRoomSettingsNewRelatedGroupKey];
-            if (!addedGroup)
-            {
-                addedGroup = [NSMutableArray array];
-                updatedItemsDict[kRoomSettingsNewRelatedGroupKey] = addedGroup;
-            }
-            
-            [addedGroup addObject:groupId];
-        }
-        
-        [self updateSections];
-        
-        [self getNavigationItem].rightBarButtonItem.enabled = (updatedItemsDict.count != 0);
-        
-        return YES;
-    }
-    
-    // Prompt here user for invalid id
-    __weak typeof(self) weakSelf = self;
-    
-    [currentAlert dismissViewControllerAnimated:NO completion:nil];
-    
-    NSString *alertMsg = [VectorL10n roomDetailsFlairInvalidIdPromptMsg:groupId];
-    
-    currentAlert = [UIAlertController alertControllerWithTitle:[VectorL10n roomDetailsFlairInvalidIdPromptTitle]
-                                                       message:alertMsg
-                                                preferredStyle:UIAlertControllerStyleAlert];
-    
-    [currentAlert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction * action) {
-                                                       
-                                                       if (weakSelf)
-                                                       {
-                                                           typeof(self) self = weakSelf;
-                                                           self->currentAlert = nil;
-                                                       }
-                                                       
-                                                   }]];
-    
-    [currentAlert mxk_setAccessibilityIdentifier:@"RoomSettingsVCAddCommunityAlert"];
     [self presentViewController:currentAlert animated:YES completion:nil];
     
     return NO;
@@ -4033,6 +3597,54 @@ NSString *const kRoomSettingsAdvancedE2eEnabledCellViewIdentifier = @"kRoomSetti
 - (void)tableViewSectionsDidUpdateSections:(TableViewSections *)sections
 {
     [self.tableView reloadData];
+}
+
+#pragma mark - RoomAccessCoordinatorBridgePresenterDelegate
+
+- (void)roomAccessCoordinatorBridgePresenterDelegate:(RoomAccessCoordinatorBridgePresenter *)coordinatorBridgePresenter didCancelRoomWithId:(NSString *)roomId
+{
+    if (![roomId isEqualToString: self.roomId]) {
+        // Room Access Coordinator upgraded the actual room -> Need to move to replacement room
+        [self.delegate roomSettingsViewController:self didReplaceRoomWithReplacementId:roomId];
+    }
+
+    MXWeakify(self);
+    [roomAccessPresenter dismissWithAnimated:YES completion:^{
+        MXStrongifyAndReturnIfNil(self);
+        self->roomAccessPresenter = nil;
+    }];
+}
+
+- (void)roomAccessCoordinatorBridgePresenterDelegate:(RoomAccessCoordinatorBridgePresenter *)coordinatorBridgePresenter didCompleteRoomWithId:(NSString *)roomId
+{
+    if (![roomId isEqualToString: self.roomId]) {
+        // Room Access Coordinator upgraded the actual room -> Need to move to replacement room
+        [self.delegate roomSettingsViewController:self didReplaceRoomWithReplacementId:roomId];
+    }
+
+    MXWeakify(self);
+    [roomAccessPresenter dismissWithAnimated:YES completion:^{
+        MXStrongifyAndReturnIfNil(self);
+        self->roomAccessPresenter = nil;
+    }];
+}
+
+#pragma mark - RoomSuggestionCoordinatorBridgePresenterDelegate
+
+- (void)roomSuggestionCoordinatorBridgePresenterDelegateDidCancel:(RoomSuggestionCoordinatorBridgePresenter *)coordinatorBridgePresenter
+{
+    [roomSuggestionPresenter dismissWithAnimated:YES completion:nil];
+    roomSuggestionPresenter = nil;
+}
+
+- (void)roomSuggestionCoordinatorBridgePresenterDelegateDidComplete:(RoomSuggestionCoordinatorBridgePresenter *)coordinatorBridgePresenter
+{
+    MXWeakify(self);
+    [roomSuggestionPresenter dismissWithAnimated:YES completion:^{
+        MXStrongifyAndReturnIfNil(self);
+        self->roomSuggestionPresenter = nil;
+        [self refreshRoomSettings];
+    }];
 }
 
 @end

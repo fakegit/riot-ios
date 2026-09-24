@@ -1,24 +1,16 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomTitleView.h"
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 @implementation RoomTitleView
 
@@ -85,7 +77,7 @@
     [super customizeViewRendering];
 
     self.backgroundColor = UIColor.clearColor;
-    self.displayNameTextField.textColor = (self.mxRoom.summary.displayname.length ? ThemeService.shared.theme.textPrimaryColor : ThemeService.shared.theme.textSecondaryColor);
+    self.displayNameTextField.textColor = (self.mxRoom.summary.displayName.length ? ThemeService.shared.theme.textPrimaryColor : ThemeService.shared.theme.textSecondaryColor);
     self.typingLabel.textColor = ThemeService.shared.theme.textSecondaryColor;
     self.dotView.backgroundColor = ThemeService.shared.theme.warningColor;
     self.missedDiscussionsBadgeLabel.textColor = ThemeService.shared.theme.tintColor;
@@ -109,10 +101,22 @@
     }
     else if (self.mxRoom)
     {
-        self.displayNameTextField.text = self.mxRoom.summary.displayname;
+        if (self.mxRoom.directUserId)
+        {
+            MXUser *contact = [self.mxRoom.mxSession userWithUserId:self.mxRoom.directUserId];
+            self.presenceIndicatorView.borderColor = ThemeService.shared.theme.headerBackgroundColor;
+            self.presenceIndicatorView.delegate = self;
+            [self.presenceIndicatorView configureWithUserId:self.mxRoom.directUserId presence:contact.presence];
+        }
+        else
+        {
+            [self.presenceIndicatorView stopListeningPresenceUpdates];
+        }
+        
+        self.displayNameTextField.text = self.mxRoom.summary.displayName;
         if (!self.displayNameTextField.text.length)
         {
-            self.displayNameTextField.text = [MatrixKitL10n roomDisplaynameEmptyRoom];
+            self.displayNameTextField.text = [VectorL10n roomDisplaynameEmptyRoom];
             self.displayNameTextField.textColor = ThemeService.shared.theme.textSecondaryColor;
         }
         else
@@ -189,6 +193,26 @@
 - (NSString *)typingNotificationString
 {
     return self.typingLabel.text;
+}
+
+#pragma mark - PresenceIndicatorViewDelegate
+
+- (void)presenceIndicatorViewDidUpdateVisibility:(PresenceIndicatorView *)presenceIndicatorView isHidden:(BOOL)isHidden
+{
+    if (isHidden)
+    {
+        [self.badgeImageViewLeadingToPictureViewConstraint setPriority:UILayoutPriorityDefaultLow];
+        [self.badgeImageViewCenterYToDisplayNameConstraint setPriority:UILayoutPriorityDefaultLow];
+        [self.badgeImageViewToPictureViewBottomConstraint setPriority:UILayoutPriorityRequired];
+        [self.badgeImageViewToPictureViewTrailingConstraint setPriority:UILayoutPriorityRequired];
+    }
+    else
+    {
+        [self.badgeImageViewToPictureViewBottomConstraint setPriority:UILayoutPriorityDefaultLow];
+        [self.badgeImageViewToPictureViewTrailingConstraint setPriority:UILayoutPriorityDefaultLow];
+        [self.badgeImageViewLeadingToPictureViewConstraint setPriority:UILayoutPriorityRequired];
+        [self.badgeImageViewCenterYToDisplayNameConstraint setPriority:UILayoutPriorityRequired];
+    }
 }
 
 @end

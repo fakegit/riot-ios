@@ -1,35 +1,43 @@
 /*
- Copyright 2015 OpenMarket Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2015 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
-#import <MatrixKit/MatrixKit.h>
+#import "MatrixKit.h"
 
 #import "MediaPickerViewController.h"
 
 @class RoomActionsBar;
+@class RoomInputToolbarView;
+@class LinkActionWrapper;
+@class SuggestionPatternWrapper;
+@class CompletionSuggestionViewModelContextWrapper;
 
 /**
  Destination of the message in the composer
  */
-typedef enum : NSUInteger
+typedef NS_ENUM(NSUInteger, RoomInputToolbarViewSendMode)
 {
     RoomInputToolbarViewSendModeSend,
     RoomInputToolbarViewSendModeReply,
-    RoomInputToolbarViewSendModeEdit
-} RoomInputToolbarViewSendMode;
+    RoomInputToolbarViewSendModeEdit,
+    RoomInputToolbarViewSendModeCreateDM
+};
 
+
+@protocol RoomInputToolbarViewProtocol
+
+@property (nonatomic, strong) NSString *eventSenderDisplayName;
+@property (nonatomic, assign) RoomInputToolbarViewSendMode sendMode;
+@property (nonatomic, assign) BOOL isEncryptionEnabled;
+- (void)setVoiceMessageToolbarView:(UIView *)voiceMessageToolbarView;
+- (CGFloat)toolbarHeight;
+
+
+@end
 
 @protocol RoomInputToolbarViewDelegate <MXKRoomInputToolbarViewDelegate>
 
@@ -38,7 +46,39 @@ typedef enum : NSUInteger
  
  @param toolbarView the room input toolbar view
  */
-- (void)roomInputToolbarViewDidTapCancel:(MXKRoomInputToolbarView*)toolbarView;
+- (void)roomInputToolbarViewDidTapCancel:(MXKRoomInputToolbarView<RoomInputToolbarViewProtocol>*)toolbarView;
+
+/**
+ Inform the delegate that the text message has changed.
+ 
+ @param toolbarView the room input toolbar view
+ */
+- (void)roomInputToolbarViewDidChangeTextMessage:(MXKRoomInputToolbarView*)toolbarView;
+
+/**
+ Inform the delegate that the action menu was opened.
+ 
+ @param toolbarView the room input toolbar view
+ */
+- (void)roomInputToolbarViewDidOpenActionMenu:(RoomInputToolbarView*)toolbarView;
+
+/**
+ Tells the delegate that the user wants to send an attributed text message.
+
+ @param toolbarView the room input toolbar view.
+ @param attributedTextMessage the attributed string to send.
+ */
+- (void)roomInputToolbarView:(RoomInputToolbarView *)toolbarView sendAttributedTextMessage:(NSAttributedString *)attributedTextMessage;
+
+- (void)didChangeMaximisedState: (BOOL) isMaximised;
+
+- (void)didSendLinkAction: (LinkActionWrapper *)linkAction;
+
+- (void)didDetectTextPattern: (SuggestionPatternWrapper *)suggestionPattern;
+
+- (CompletionSuggestionViewModelContextWrapper *)completionSuggestionContext;
+
+- (MXMediaManager *)mediaManager;
 
 @end
 
@@ -46,35 +86,17 @@ typedef enum : NSUInteger
  `RoomInputToolbarView` instance is a view used to handle all kinds of available inputs
  for a room (message composer, attachments selection...).
  */
-@interface RoomInputToolbarView : MXKRoomInputToolbarViewWithHPGrowingText
+@interface RoomInputToolbarView : MXKRoomInputToolbarView<RoomInputToolbarViewProtocol>
 
 /**
  The delegate notified when inputs are ready.
  */
 @property (nonatomic, weak) id<RoomInputToolbarViewDelegate> delegate;
 
-@property (weak, nonatomic) IBOutlet UIView *mainToolbarView;
-
-@property (weak, nonatomic) IBOutlet NSLayoutConstraint *mainToolbarMinHeightConstraint;
-@property (weak, nonatomic) IBOutlet NSLayoutConstraint *mainToolbarHeightConstraint;
-
-@property (weak, nonatomic) IBOutlet NSLayoutConstraint *messageComposerContainerTrailingConstraint;
-
-@property (weak, nonatomic) IBOutlet UIButton *attachMediaButton;
-
-@property (weak, nonatomic) IBOutlet UIImageView *inputTextBackgroundView;
-
-@property (weak, nonatomic) IBOutlet NSLayoutConstraint *inputContextViewHeightConstraint;
-@property (weak, nonatomic) IBOutlet UIImageView *inputContextImageView;
-@property (weak, nonatomic) IBOutlet UILabel *inputContextLabel;
-@property (weak, nonatomic) IBOutlet UIButton *inputContextButton;
-@property (weak, nonatomic) IBOutlet RoomActionsBar *actionsBar;
-@property (weak, nonatomic) UIView *voiceMessageToolbarView;
-
 /**
  Tell whether the filled data will be sent encrypted. NO by default.
  */
-@property (nonatomic) BOOL isEncryptionEnabled;
+@property (nonatomic, assign) BOOL isEncryptionEnabled;
 
 /**
  Sender of the event being edited / replied.
@@ -84,11 +106,31 @@ typedef enum : NSUInteger
 /**
  Destination of the message in the composer.
  */
-@property (nonatomic) RoomInputToolbarViewSendMode sendMode;
+@property (nonatomic, assign) RoomInputToolbarViewSendMode sendMode;
 
 /**
  YES if action menu is opened. NO otherwise
  */
-@property (nonatomic, getter=isActionMenuOpened) BOOL actionMenuOpened;
+@property (nonatomic, assign) BOOL actionMenuOpened;
+
+/**
+ The input toolbar's main height constraint
+ */
+@property (nonatomic, weak, readonly) NSLayoutConstraint *mainToolbarHeightConstraint;
+
+/**
+ The input toolbar's action bar
+ */
+@property (nonatomic, weak, readonly) RoomActionsBar *actionsBar;
+
+/**
+ The attach media button
+ */
+@property (nonatomic, weak, readonly) UIButton *attachMediaButton;
+
+/**
+ Adds a voice message toolbar view to be displayed inside this input toolbar
+ */
+- (void)setVoiceMessageToolbarView:(UIView *)toolbarView;
 
 @end

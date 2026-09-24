@@ -1,0 +1,69 @@
+name: UI Tests CI
+
+on:
+  pull_request:
+
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  # Make the git branch for a PR available to our Fastfile
+  MX_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+
+jobs:
+  tests:
+    name: UI Tests
+    runs-on: macos-26
+    
+    concurrency:
+      # Only allow a single run of this workflow on each branch, automatically cancelling older runs.
+      group: ui-tests-${{ github.head_ref }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+            submodules: 'true'
+            persist-credentials: false
+
+      # Common cache
+      # Note: GH actions do not support yaml anchor yet. We need to duplicate this for every job
+      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gems-
+
+      # Make sure we use the latest version of MatrixSDK
+      - name: Reset MatrixSDK pod
+        run: rm -rf Pods/MatrixSDK
+
+      # Common setup
+      # Note: GH actions do not support yaml anchor yet. We need to duplicate this for every job
+      - name: Brew bundle
+        run: brew bundle
+      - name: Bundle install
+        run: |
+          bundle config path vendor/bundle
+          bundle install --jobs 4 --retry 3
+          
+      - name: Xcodegen
+        run: mint run yonaskolb/XcodeGen@2.39.0
+
+      # Main step
+      - name: UI tests
+        run: bundle exec fastlane uitest
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: uitests

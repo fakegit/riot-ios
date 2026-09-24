@@ -1,20 +1,14 @@
 /*
- Copyright 2015 OpenMarket Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2015 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
-#import <MatrixKit/MatrixKit.h>
+#import "MatrixKit.h"
+
+@protocol MXBeaconInfoSummaryProtocol;
 
 extern NSString *const URLPreviewDidUpdateNotification;
 
@@ -31,7 +25,14 @@ typedef NS_ENUM(NSInteger, RoomBubbleCellDataTag)
     RoomBubbleCellDataTagKeyVerificationConclusion,
     RoomBubbleCellDataTagCall,
     RoomBubbleCellDataTagGroupCall,
-    RoomBubbleCellDataTagRoomCreationIntro
+    RoomBubbleCellDataTagRTCCallNotify,
+    RoomBubbleCellDataTagRoomCreationIntro,
+    RoomBubbleCellDataTagPoll,
+    RoomBubbleCellDataTagLocation,
+    RoomBubbleCellDataTagLiveLocation,
+    RoomBubbleCellDataTagVoiceBroadcastRecord,
+    RoomBubbleCellDataTagVoiceBroadcastPlayback,
+    RoomBubbleCellDataTagVoiceBroadcastNoDisplay
 };
 
 /**
@@ -90,10 +91,14 @@ typedef NS_ENUM(NSInteger, RoomBubbleCellDataTag)
  */
 @property(nonatomic) BOOL isKeyVerificationOperationPending;
 
+@property(nonatomic, strong) id<MXBeaconInfoSummaryProtocol> beaconInfoSummary;
+
 /**
  Index of the component which needs a sent tick displayed. -1 if none.
  */
 @property(nonatomic) NSInteger componentIndexOfSentMessageTick;
+
+@property(nonatomic, strong) NSString *voiceBroadcastState;
 
 /**
  Indicate that both the text message layout and any additional content height are no longer

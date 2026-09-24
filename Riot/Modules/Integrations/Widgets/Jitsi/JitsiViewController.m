@@ -1,22 +1,14 @@
 /*
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "JitsiViewController.h"
 #import "JitsiWidgetData.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #if __has_include(<MatrixSDK/MXJingleCallStack.h>)
 @import JitsiMeetSDK;
@@ -35,6 +27,8 @@ static NSString * _Nonnull kRCTTextViewClassName = @"RCTTextView";
  Some feature flags defined in https://github.com/jitsi/jitsi-meet/blob/master/react/features/base/flags/constants.js
  */
 static NSString * _Nonnull kJitsiFeatureFlagChatEnabled = @"chat.enabled";
+static NSString * _Nonnull kJitsiFeatureFlagScreenSharingEnabled = @"ios.screensharing.enabled";
+static NSString * _Nonnull kJitsiFeatureFlagHideDisplayName = @"prejoinpage.hideDisplayName";
 
 @interface JitsiViewController () <PictureInPicturable, JitsiMeetViewDelegate>
 
@@ -272,12 +266,14 @@ static NSString * _Nonnull kJitsiFeatureFlagChatEnabled = @"chat.enabled";
             builder.room = conferenceId;
             builder.videoMuted = !self.startWithVideo;
 
-            builder.subject = roomSummary.displayname;
+            builder.subject = roomSummary.displayName;
             builder.userInfo = [[JitsiMeetUserInfo alloc] initWithDisplayName:userDisplayName
                                                                      andEmail:nil
                                                                     andAvatar:avatarUrl];
             builder.token = self.jwtToken;
             [builder setFeatureFlag:kJitsiFeatureFlagChatEnabled withBoolean:NO];
+            [builder setFeatureFlag:kJitsiFeatureFlagScreenSharingEnabled withBoolean: YES];
+            [builder setFeatureFlag:kJitsiFeatureFlagHideDisplayName withBoolean: YES];
         }];
         
         [self.jitsiMeetView join:jitsiMeetConferenceOptions];
@@ -319,26 +315,25 @@ static NSString * _Nonnull kJitsiFeatureFlagChatEnabled = @"chat.enabled";
 
 - (void)conferenceTerminated:(NSDictionary *)data
 {
+    // If the call is terminated by a moderator the error key contains the "conference.destroyed" value
     if (data[kJitsiDataErrorKey] != nil)
     {
         MXLogDebug(@"[JitsiViewController] conferenceTerminated - data: %@", data);
     }
-    else
-    {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            
-            // The conference is over. Let the delegate close this view controller.
-            if (self.delegate)
-            {
-                [self.delegate jitsiViewController:self dismissViewJitsiController:nil];
-            }
-            else
-            {
-                // Do it ourself
-                [self dismissViewControllerAnimated:YES completion:nil];
-            }
-        });
-    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        
+        // The conference is over. Let the delegate close this view controller.
+        if (self.delegate)
+        {
+            [self.delegate jitsiViewController:self dismissViewJitsiController:nil];
+        }
+        else
+        {
+            // Do it ourself
+            [self dismissViewControllerAnimated:YES completion:nil];
+        }
+    });
 }
 
 - (void)enterPictureInPicture:(NSDictionary *)data

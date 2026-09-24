@@ -1,21 +1,12 @@
 /*
- Copyright 2019 New Vector Ltd
+Copyright 2019-2024 New Vector Ltd.
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "AuthFallBackViewController.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 // Generic method to make a bridge between JS and the WKWebView
 NSString *FallBackViewControllerJavascriptSendObjectMessage = @"window.sendObjectMessage = function(parameters) {   \
@@ -102,14 +93,14 @@ NSString *FallBackViewControllerJavascriptOnLogin = @"window.matrixLogin.onLogin
         }
         else
         {
-            title = [MatrixKitL10n error];
+            title = [VectorL10n error];
         }
     }
 
     MXWeakify(self);
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
+    [alert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok]
                                               style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction * action) {
                                                 MXStrongifyAndReturnIfNil(self);
@@ -157,7 +148,7 @@ NSString *FallBackViewControllerJavascriptOnLogin = @"window.matrixLogin.onLogin
     if ([urlString hasPrefix:@"js:"])
     {
         // Listen only to scheme of the JS-WKWebView bridge
-        NSString *jsonString = [[[urlString componentsSeparatedByString:@"js:"] lastObject]  stringByReplacingPercentEscapesUsingEncoding:NSASCIIStringEncoding];
+        NSString *jsonString = [[[urlString componentsSeparatedByString:@"js:"] lastObject]  stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
         NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
 
         NSError *error;

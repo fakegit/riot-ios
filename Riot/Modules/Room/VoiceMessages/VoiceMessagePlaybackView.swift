@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -43,13 +34,16 @@ class VoiceMessagePlaybackView: UIView, NibLoadable, Themable {
     
     private var _waveformView: VoiceMessageWaveformView!
     private var currentTheme: Theme?
-    private var scrubProgress: CGFloat?
     
     @IBOutlet private var backgroundView: UIView!
     @IBOutlet private var recordingIcon: UIView!
     @IBOutlet private var playButton: UIButton!
     @IBOutlet private var elapsedTimeLabel: UILabel!
     @IBOutlet private var waveformContainerView: UIView!
+    @IBOutlet private(set) var stackViewTrailingContraint: NSLayoutConstraint!
+    
+    private var longPressGestureRecognizer: UILongPressGestureRecognizer!
+    private var panGestureRecognizer: UIPanGestureRecognizer!
     
     weak var delegate: VoiceMessagePlaybackViewDelegate?
     
@@ -57,6 +51,16 @@ class VoiceMessagePlaybackView: UIView, NibLoadable, Themable {
     
     var waveformView: UIView {
         return _waveformView
+    }
+    
+    /// Define the `backgroundView.backgroundColor`.
+    /// By setting this value the theme color will not be applyied to `backgroundView` in `update(theme: Theme)` method.
+    var customBackgroundViewColor: UIColor? {
+        didSet {
+            if let theme = currentTheme {
+                self.update(theme: theme)
+            }
+        }
     }
     
     override var bounds: CGRect {
@@ -75,6 +79,14 @@ class VoiceMessagePlaybackView: UIView, NibLoadable, Themable {
         
         _waveformView = VoiceMessageWaveformView(frame: waveformContainerView.bounds)
         waveformContainerView.vc_addSubViewMatchingParent(_waveformView)
+        
+        longPressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressGesture(_:)))
+        longPressGestureRecognizer.minimumPressDuration = 0.2
+        waveformView.addGestureRecognizer(longPressGestureRecognizer)
+        
+        panGestureRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePanGesture(_:)))
+        panGestureRecognizer.isEnabled = false
+        waveformView.addGestureRecognizer(panGestureRecognizer)
     }
     
     func configureWithDetails(_ details: VoiceMessagePlaybackViewDetails?) {
@@ -116,12 +128,16 @@ class VoiceMessagePlaybackView: UIView, NibLoadable, Themable {
         }
         
         self.backgroundColor = theme.colors.background
-        playButton.backgroundColor = theme.colors.background
+        playButton.backgroundColor = theme.roomCellIncomingBubbleBackgroundColor
         playButton.tintColor = theme.colors.secondaryContent
-        backgroundView.backgroundColor = theme.colors.quinaryContent
+        
+        let backgroundViewColor = self.customBackgroundViewColor ?? theme.colors.quinaryContent
+        
+        backgroundView.backgroundColor = backgroundViewColor
         _waveformView.primaryLineColor =  theme.colors.quarterlyContent
         _waveformView.secondaryLineColor = theme.colors.secondaryContent
-        elapsedTimeLabel.textColor = theme.colors.tertiaryContent
+        elapsedTimeLabel.textColor = theme.colors.secondaryContent
+        elapsedTimeLabel.font = theme.fonts.body
     }
     
     func getRequiredNumberOfSamples() -> Int {
@@ -136,28 +152,36 @@ class VoiceMessagePlaybackView: UIView, NibLoadable, Themable {
         currentTheme = theme
         configureWithDetails(details)
     }
-    
+        
     // MARK: - Private
         
     @IBAction private func onPlayButtonTap() {
         delegate?.voiceMessagePlaybackViewDidRequestPlaybackToggle()
     }
     
-    @IBAction private func tap(gestureRecognizer: UITapGestureRecognizer) {
+    @objc private func handleLongPressGesture(_ gestureRecognizer: UITapGestureRecognizer) {
         let x = gestureRecognizer.location(in: waveformContainerView).x.clamped(to: 0...waveformContainerView.bounds.width)
         let progress = x / waveformContainerView.bounds.width
         delegate?.voiceMessagePlaybackViewDidRequestSeek(to: progress)
-    }
-
-    @IBAction private func pan(gestureRecognizer: UIPanGestureRecognizer) {
-            switch gestureRecognizer.state {
-            case .began, .changed:
-                let x = gestureRecognizer.location(in: waveformContainerView).x.clamped(to: 0...waveformContainerView.bounds.width)
-                let progress = x / waveformContainerView.bounds.width
-                scrubProgress = progress
-                delegate?.voiceMessagePlaybackViewDidRequestSeek(to: progress)
-            default:
-                scrubProgress = nil
-            }
+        
+        switch gestureRecognizer.state {
+        case .began:
+            panGestureRecognizer.isEnabled = true
+        case .ended, .failed, .cancelled:
+            panGestureRecognizer.isEnabled = false
+        default:
+            break
         }
+    }
+    
+    @objc private func handlePanGesture(_ gestureRecognizer: UIPanGestureRecognizer) {
+        switch gestureRecognizer.state {
+        case .began, .changed:
+            let x = gestureRecognizer.location(in: waveformContainerView).x.clamped(to: 0...waveformContainerView.bounds.width)
+            let progress = x / waveformContainerView.bounds.width
+            delegate?.voiceMessagePlaybackViewDidRequestSeek(to: progress)
+        default:
+            break
+        }
+    }
 }

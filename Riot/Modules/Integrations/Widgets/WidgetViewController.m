@@ -1,24 +1,15 @@
 /*
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "WidgetViewController.h"
 
 #import "IntegrationManagerViewController.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse('%@', %@);";
 
@@ -60,7 +51,7 @@ NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse
     {
         self.navigationItem.title = widget.name ? widget.name : widget.type;
 
-        UIBarButtonItem *menuButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"room_context_menu_more"] style:UIBarButtonItemStylePlain target:self action:@selector(onMenuButtonPressed:)];
+        UIBarButtonItem *menuButton = [[UIBarButtonItem alloc] initWithImage:AssetImages.roomContextMenuMore.image style:UIBarButtonItemStylePlain target:self action:@selector(onMenuButtonPressed:)];
         self.navigationItem.rightBarButtonItem = menuButton;
     }
     
@@ -103,7 +94,7 @@ NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse
     {
         // Check user's power in the room
         MXRoomPowerLevels *powerLevels = roomState.powerLevels;
-        NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:session.myUser.userId];
+        NSInteger oneSelfPowerLevel = [roomState powerLevelOfUserWithUserID:session.myUser.userId];
 
         // The user must be able to send state events to manage widgets
         if (oneSelfPowerLevel >= powerLevels.stateDefault)
@@ -143,14 +134,14 @@ NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse
         }
         else
         {
-            title = [MatrixKitL10n error];
+            title = [VectorL10n error];
         }
     }
 
     __weak __typeof__(self) weakSelf = self;
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
+    [alert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok]
                                               style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction * action) {
 
@@ -334,7 +325,7 @@ NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse
                          }]];
     }
 
-    [menu addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+    [menu addAction:[UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                     style:UIAlertActionStyleCancel
                                                   handler:^(UIAlertAction * action) {
                                                   }]];
@@ -656,8 +647,7 @@ NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse
     MXLogDebug(@"[WidgetVC] presentTerms for %@", config.baseUrl);
 
     ServiceTermsModalCoordinatorBridgePresenter *serviceTermsModalCoordinatorBridgePresenter = [[ServiceTermsModalCoordinatorBridgePresenter alloc] initWithSession:widget.mxSession baseUrl:config.baseUrl
-                                                                                                                                                       serviceType:MXServiceTypeIntegrationManager
-                                                                                                                                                       outOfContext:NO
+                                                                                                                                                        serviceType:MXServiceTypeIntegrationManager
                                                                                                                                                         accessToken:config.scalarToken];
     serviceTermsModalCoordinatorBridgePresenter.delegate = self;
 
@@ -677,7 +667,7 @@ NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 
-- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidCancel:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter
+- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidDecline:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter session:(MXSession * _Nonnull)session
 {
     [coordinatorBridgePresenter dismissWithAnimated:YES completion:^{
         [self withdrawViewControllerAnimated:YES completion:nil];
@@ -685,11 +675,8 @@ NSString *const kJavascriptSendResponseToPostMessageAPI = @"riotIOS.sendResponse
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 
-- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidDecline:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter session:(MXSession * _Nonnull)session
+- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidClose:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter
 {
-    [coordinatorBridgePresenter dismissWithAnimated:YES completion:^{
-        [self withdrawViewControllerAnimated:YES completion:nil];
-    }];
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 

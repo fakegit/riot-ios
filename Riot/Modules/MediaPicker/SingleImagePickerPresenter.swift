@@ -1,17 +1,8 @@
 /*
- Copyright 2019 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2019-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -26,6 +17,12 @@ import AVFoundation
 /// SingleImagePickerPresenter enables to present an image picker with single selection
 @objcMembers
 final class SingleImagePickerPresenter: NSObject {
+    
+    // MARK: - Constants
+    
+    private enum Constants {
+        static let jpegCompressionQuality: CGFloat = 1.0
+    }
     
     // MARK: - Properties
     
@@ -117,8 +114,10 @@ final class SingleImagePickerPresenter: NSObject {
 // MARK: - CameraPresenterDelegate
 extension SingleImagePickerPresenter: CameraPresenterDelegate {
     
-    func cameraPresenter(_ cameraPresenter: CameraPresenter, didSelectImageData imageData: Data, withUTI uti: MXKUTI?) {
-        self.delegate?.singleImagePickerPresenter(self, didSelectImageData: imageData, withUTI: uti)
+    func cameraPresenter(_ cameraPresenter: CameraPresenter, didSelectImage image: UIImage) {
+        if let imageData = image.jpegData(compressionQuality: Constants.jpegCompressionQuality) {
+            self.delegate?.singleImagePickerPresenter(self, didSelectImageData: imageData, withUTI: MXKUTI.jpeg)
+        }
     }
     
     func cameraPresenterDidCancel(_ cameraPresenter: CameraPresenter) {

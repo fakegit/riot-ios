@@ -1,17 +1,8 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -30,8 +21,19 @@ enum NotificationPushRuleId: String {
     case allOtherMessages = ".m.rule.message"
     case encrypted = ".m.rule.encrypted"
     case keywords = "_keywords"
+    // poll started event
+    case pollStart = ".m.rule.poll_start"
+    case msc3930pollStart = ".org.matrix.msc3930.rule.poll_start"
+    // poll started event (one to one)
+    case oneToOnePollStart = ".m.rule.poll_start_one_to_one"
+    case msc3930oneToOnePollStart = ".org.matrix.msc3930.rule.poll_start_one_to_one"
+    // poll ended event
+    case pollEnd = ".m.rule.poll_end"
+    case msc3930pollEnd = ".org.matrix.msc3930.rule.poll_end"
+    // poll ended event (one to one)
+    case oneToOnePollEnd = ".m.rule.poll_end_one_to_one"
+    case msc3930oneToOnePollEnd = ".org.matrix.msc3930.rule.poll_end_one_to_one"
 }
-
 
 extension NotificationPushRuleId: Identifiable {
     var id: String {
@@ -66,6 +68,20 @@ extension NotificationPushRuleId {
             return VectorL10n.settingsEncryptedGroupMessages
         case .keywords:
             return VectorL10n.settingsMessagesContainingKeywords
+        case .pollStart, .msc3930pollStart, .oneToOnePollStart, .msc3930oneToOnePollStart, .pollEnd, .msc3930pollEnd, .oneToOnePollEnd, .msc3930oneToOnePollEnd:
+            // They don't need to be rendered on the UI
+            return ""
+        }
+    }
+    
+    var syncedRules: [NotificationPushRuleId] {
+        switch self {
+        case .oneToOneRoom:
+            return [.oneToOnePollStart, .msc3930oneToOnePollStart, .oneToOnePollEnd, .msc3930oneToOnePollEnd]
+        case .allOtherMessages:
+            return [.pollStart, .msc3930pollStart, .pollEnd, .msc3930pollEnd]
+        default:
+            return []
         }
     }
 }

@@ -1,1 +1,176 @@
 
+
+
+/** Media Messages **/
+
+/* New image message from a specific person, not referencing a room. */
+"PICTURE_FROM_USER" = "%@ sendi mynd";
+
+/** Key verification **/
+
+"KEY_VERIFICATION_REQUEST_FROM_USER" = "%@ vill sannreyna";
+
+/* Group call from user, CallKit caller name */
+"GROUP_CALL_FROM_USER" = "%@ (hópsímtal)";
+
+/* A user added a Jitsi call to a room */
+"GROUP_CALL_STARTED" = "Hópsímtal er byrjað";
+
+/* Incoming named video conference invite from a specific person */
+"VIDEO_CONF_NAMED_FROM_USER" = "Myndsamtal í hópi frá %@: '%@'";
+
+/* Incoming named voice conference invite from a specific person */
+"VOICE_CONF_NAMED_FROM_USER" = "Hópsímtal frá %@: '%@'";
+
+/* Incoming unnamed video conference invite from a specific person */
+"VIDEO_CONF_FROM_USER" = "Myndsamtal í hópi frá %@";
+
+/* Incoming unnamed voice conference invite from a specific person */
+"VOICE_CONF_FROM_USER" = "Hópsímtal frá %@";
+
+/* Incoming one-to-one video call */
+"VIDEO_CALL_FROM_USER" = "Myndsamtal frá %@";
+
+/** Calls **/
+
+/* Incoming one-to-one voice call */
+"VOICE_CALL_FROM_USER" = "Símtal frá %@";
+
+/* A user's membership has updated in an unknown way */
+"USER_MEMBERSHIP_UPDATED" = "%@ uppfærði notandasniðið sitt";
+
+/* A user has change their avatar */
+"USER_UPDATED_AVATAR" = "%@ breytti auðkennismynd sinni";
+
+/* A user has change their name to a new name which we don't know */
+"GENERIC_USER_UPDATED_DISPLAYNAME" = "%@ breytti nafni sínu";
+
+/** Membership Updates **/
+
+/* A user has change their name to a new name */
+"USER_UPDATED_DISPLAYNAME" = "%@ breyttu nafni sínu í %@";
+
+/* A user has invited you to a named room */
+"USER_INVITE_TO_NAMED_ROOM" = "%@ bauð þér í %@";
+
+/* A user has invited you to an (unamed) group chat */
+"USER_INVITE_TO_CHAT_GROUP_CHAT" = "%@ bauð þér að taka þátt í hópspjalli";
+
+/** Invites **/
+
+/* A user has invited you to a chat */
+"USER_INVITE_TO_CHAT" = "%@ hefur boðið þér að spjalla";
+
+/* A user has reacted to a message, but the reaction content is unknown */
+"GENERIC_REACTION_FROM_USER" = "%@ sendi viðbrögð";
+
+/** Reactions **/
+
+/* A user has reacted to a message, including the reaction e.g. "Alice reacted 👍". */
+"REACTION_FROM_USER" = "%@ brást við með %@";
+
+/* Look, stuff's happened, alright? Just open the app. */
+
+/* Multiple messages in two rooms */
+"MSGS_IN_TWO_ROOMS" = "%@ ný skilaboð í %@ og %@";
+
+/* Multiple unread messages from two plus people (ie. for 4+ people: 'others' replaces the third person) */
+"MSGS_FROM_TWO_PLUS_USERS" = "%@ ný skilaboð frá %@, %@ og fleirum";
+
+/* Multiple unread messages from three people */
+"MSGS_FROM_THREE_USERS" = "%@ ný skilaboð frá %@, %@ og %@";
+
+/* Multiple unread messages from two people */
+"MSGS_FROM_TWO_USERS" = "%@ ný skilaboð frá %@ og %@";
+
+/* Multiple unread messages from a specific person, not referencing a room */
+"MSGS_FROM_USER" = "%@ ný skilaboð í %@";
+
+/** Coalesced messages **/
+
+/* Multiple unread messages in a room */
+"UNREAD_IN_ROOM" = "%@ ný skilaboð í %@";
+
+/* New message with hidden content due to PIN enabled */
+"MESSAGE_PROTECTED" = "Ný skilaboð";
+
+/* New message indicator on a room */
+"MESSAGE_IN_X" = "Skilaboð í %@";
+
+/* New message indicator from a DM */
+"MESSAGE_FROM_X" = "Skilaboð frá %@";
+
+/** Notification messages **/
+
+/* New message indicator on unknown room */
+"MESSAGE" = "Skilaboð";
+
+/* Sticker from a specific person, not referencing a room. */
+"STICKER_FROM_USER" = "%@ sendi límmerki";
+
+/* A single unread message */
+"SINGLE_UNREAD" = "Þú hefur fengið skilaboð";
+
+/* A single unread message in a room */
+"SINGLE_UNREAD_IN_ROOM" = "Þú hefur fengið skilaboð í %@";
+
+/* New file message from a specific person, not referencing a room. */
+"LOCATION_FROM_USER" = "%@ hefur deilt staðsetningu sinni";
+
+/* New file message from a specific person, not referencing a room. */
+"FILE_FROM_USER" = "%@ sendi skrá %@";
+
+/* New voice message from a specific person, not referencing a room. */
+"VOICE_MESSAGE_FROM_USER" = "%@ sendi talskilaboð";
+
+/* New audio message from a specific person, not referencing a room. */
+"AUDIO_FROM_USER" = "%@ sendi hljóðskrá %@";
+
+/* New video message from a specific person, not referencing a room. */
+"VIDEO_FROM_USER" = "%@ sendi myndskeið";
+
+/* New image message from a specific person in a named room. */
+"IMAGE_FROM_USER_IN_ROOM" = "%@ birti mynd %@ í %@";
+
+/* New action message from a specific person in a named room. */
+"ACTION_FROM_USER_IN_ROOM" = "%@: * %@ %@";
+
+/* New action message from a specific person, not referencing a room. */
+"ACTION_FROM_USER" = "* %@ %@";
+
+/* New message from a specific person in a named room. Content included. */
+"MSG_FROM_USER_IN_ROOM_WITH_CONTENT" = "%@ í %@: %@";
+
+/** Single, unencrypted messages (where we can include the content */
+
+/* New message from a specific person, not referencing a room. Content included. */
+"MSG_FROM_USER_WITH_CONTENT" = "%@: %@";
+
+/* New message from a specific person in a named room */
+"MSG_FROM_USER_IN_ROOM" = "%@ birti í %@";
+
+/** Single, end-to-end encrypted messages (ie. we don't know what they say) */
+
+/* New message from a specific person, not referencing a room */
+"MSG_FROM_USER" = "%@ sendi skilboð";
+
+/* New message reply from a specific person in a named room. */
+"REPLY_FROM_USER_IN_ROOM_TITLE" = "%@ svaraði í %@";
+
+/* New message reply from a specific person, not referencing a room. */
+"REPLY_FROM_USER_TITLE" = "%@ svaraði";
+
+/** Titles **/
+
+/* Message title for a specific person in a named room */
+"MSG_FROM_USER_IN_ROOM_TITLE" = "%@ í %@";
+/** General **/
+
+"Notification" = "Tilkynning";
+
+/* Look, stuff's happened, alright? Just open the app. */
+"MSGS_IN_TWO_PLUS_ROOMS" = "%@ ný skilaboð í %@, %@ og fleirum";
+
+/* New voice broadcast from a specific person, not referencing a room. */
+"VOICE_BROADCAST_FROM_USER" = "%@ byrjaði talútsendingu";
+"UNSUPPORTED_CALL" = "Símtal án stuðnings";

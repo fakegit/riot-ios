@@ -10,6 +10,7 @@ schemes:
       targets:
         RiotSwiftUI:
         - running
+        - testing
         - profiling
         - analyzing
         - archiving
@@ -18,6 +19,14 @@ schemes:
     run:
       config: Debug
       disableMainThreadChecker: true
+    test:
+      config: Debug
+      disableMainThreadChecker: true
+      targets:
+      - RiotSwiftUnitTests
+      gatherCoverageData: true
+      coverageTargets:
+        - RiotSwiftUI
 
 targets:
   RiotSwiftUI:
@@ -25,6 +34,9 @@ targets:
     platform: iOS
     dependencies:
     - target: DesignKit
+    - package: AnalyticsEvents
+    - package: Mapbox
+    - package: WysiwygComposer
     sources:
     - path: .
       excludes:
@@ -32,13 +44,29 @@ targets:
       - "**/MatrixSDK/**"
       - "**/Coordinator/**"
       - "**/Test/**"
+    - path: ../Riot/Managers/AppInfo/
+    - path: ../Riot/Categories/Bundle.swift
     - path: ../Riot/Generated/Strings.swift
+    - path: ../Riot/Generated/UntranslatedStrings.swift
     - path: ../Riot/Generated/Images.swift
-    - path: ../Riot/Managers/Theme/ThemeIdentifier.swift
+    - path: ../Riot/Managers/Theme/
     - path: ../Riot/Managers/Locale/LocaleProviderType.swift
+    - path: ../Config/BuildSettings.swift
+    - path: ../Config/MDMSettings.swift
+    - path: ../Riot/Modules/Room/TimelineCells/Styles/RoomTimelineStyleIdentifier.swift
     - path: ../Riot/Categories/String.swift
     - path: ../Riot/Categories/Character.swift
+    - path: ../Riot/Categories/UIColor.swift
+    - path: ../Riot/Categories/UISearchBar.swift
+    - path: ../Riot/Categories/UIView.swift
+    - path: ../Riot/Categories/UIApplication.swift
+    - path: ../Riot/Categories/Codable.swift
     - path: ../Riot/Assets/en.lproj/Vector.strings
+    - path: ../Riot/Modules/Analytics/AnalyticsScreen.swift
+    - path: ../Riot/Modules/LocationSharing/LocationAuthorizationStatus.swift
+    - path: ../Riot/Modules/QRCode/QRCodeGenerator.swift
+    - path: ../Riot/Modules/VoiceBroadcast/VoiceBroadcastSDK/MatrixSDK/VoiceBroadcastInfoState.swift
+    - path: ../Riot/Assets/en.lproj/Untranslated.strings
       buildPhase: resources
     - path: ../Riot/Assets/Images.xcassets
       buildPhase: resources
@@ -47,3 +75,9 @@ targets:
     configFiles:
       Debug: Debug.xcconfig
       Release: Release.xcconfig
+
+    postBuildScripts:
+    - name: 🧹 SwiftFormat
+      runOnlyWhenInstalling: false
+      shell: /bin/sh
+      script: "\"${PODS_ROOT}/SwiftFormat/CommandLineTool/swiftformat\" --lint --lenient \"$PROJECT_DIR\"\n"

@@ -1,23 +1,14 @@
 //
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import Foundation
-import MatrixSDK
 import Combine
 import DesignKit
+import Foundation
+import MatrixSDK
 
 enum AvatarServiceError: Error {
     case pathNotfound
@@ -25,17 +16,12 @@ enum AvatarServiceError: Error {
 }
 
 class AvatarService: AvatarServiceProtocol {
-    
     private enum Constants {
         static let mimeType = "image/jpeg"
         static let thumbnailMethod = MXThumbnailingMethodCrop
     }
     
     private let mediaManager: MXMediaManager
-    
-    static func instantiate(mediaManager: MXMediaManager) -> AvatarServiceProtocol {
-        return AvatarService(mediaManager: mediaManager)
-    }
     
     init(mediaManager: MXMediaManager) {
         self.mediaManager = mediaManager
@@ -48,15 +34,14 @@ class AvatarService: AvatarServiceProtocol {
     ///   - mxContentUri: matrix uri of the avatar to fetch
     ///   - avatarSize: The size of avatar to retrieve as defined in the DesignKit spec.
     /// - Returns: A Future of UIImage that returns an error if it fails to fetch the image.
-    @available(iOS 14.0, *)
     func avatarImage(mxContentUri: String, avatarSize: AvatarSize) -> Future<UIImage, Error> {
-        
         let cachePath = MXMediaManager.thumbnailCachePath(
             forMatrixContentURI: mxContentUri,
             andType: Constants.mimeType,
-            inFolder: nil, 
+            inFolder: nil,
             toFitViewSize: avatarSize.size,
-            with: Constants.thumbnailMethod)
+            with: Constants.thumbnailMethod
+        )
         
         return Future<UIImage, Error> { promise in
             if let image = MXMediaManager.loadThroughCache(withFilePath: cachePath),
@@ -70,7 +55,8 @@ class AvatarService: AvatarServiceProtocol {
                 withType: Constants.mimeType,
                 inFolder: nil,
                 toFitViewSize: avatarSize.size,
-                with: Constants.thumbnailMethod) { path in
+                with: Constants.thumbnailMethod
+            ) { path in
                 guard let path = path else {
                     promise(.failure(AvatarServiceError.pathNotfound))
                     return

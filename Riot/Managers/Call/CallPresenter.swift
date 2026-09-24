@@ -1,21 +1,11 @@
 //
-// Copyright 2020 New Vector Ltd
+// Copyright 2020-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
-import MatrixKit
 
 // swiftlint:disable file_length
 
@@ -168,7 +158,7 @@ class CallPresenter: NSObject {
         
         #else
         AppDelegate.theDelegate().showAlert(withTitle: nil,
-                                            message: MatrixKitL10n.notSupportedYet)
+                                            message: VectorL10n.notSupportedYet)
         #endif
     }
     
@@ -209,7 +199,7 @@ class CallPresenter: NSObject {
             if error == nil {
                 JMCallKitProxy.reportCallUpdate(with: newUUID,
                                                 handle: roomId,
-                                                displayName: room.summary.displayname,
+                                                displayName: room.summary.displayName,
                                                 hasVideo: true)
                 JMCallKitProxy.reportOutgoingCall(with: newUUID, connectedAt: nil)
 
@@ -264,24 +254,25 @@ class CallPresenter: NSObject {
     func processWidgetEvent(_ event: MXEvent, inSession session: MXSession) {
         MXLog.debug("[CallPresenter] processWidgetEvent")
         
-        guard JMCallKitProxy.isProviderConfigured() else {
-            //  CallKit proxy is not configured, no benefit in parsing the event
-            MXLog.debug("[CallPresenter] processWidgetEvent: JMCallKitProxy not configured")
-            return
-        }
-        
         guard let widget = Widget(widgetEvent: event, inMatrixSession: session) else {
             MXLog.debug("[CallPresenter] processWidgetEvent: widget couldn't be created")
             return
         }
         
-        if let uuid = self.jitsiCalls.first(where: { $0.value.widgetId == widget.widgetId })?.key {
-            //  this Jitsi call is already managed by this class, no need to report the call again
-            MXLog.debug("[CallPresenter] processWidgetEvent: Jitsi call already managed with id: \(uuid.uuidString)")
+        guard JMCallKitProxy.isProviderConfigured() else {
+            //  CallKit proxy is not configured, no benefit in parsing the event
+            MXLog.debug("[CallPresenter] processWidgetEvent: JMCallKitProxy not configured")
+            hangupUnhandledCallIfNeeded(widget)
             return
         }
         
         if widget.isActive {
+            if let uuid = self.jitsiCalls.first(where: { $0.value.widgetId == widget.widgetId })?.key {
+                //  this Jitsi call is already managed by this class, no need to report the call again
+                MXLog.debug("[CallPresenter] processWidgetEvent: Jitsi call already managed with id: \(uuid.uuidString)")
+                return
+            }
+            
             guard widget.type == kWidgetTypeJitsiV1 || widget.type == kWidgetTypeJitsiV2 else {
                 //  not a Jitsi widget, ignore
                 MXLog.debug("[CallPresenter] processWidgetEvent: not a Jitsi widget")
@@ -318,8 +309,11 @@ class CallPresenter: NSObject {
                     return
                 }
                 let user = session.user(withUserId: event.sender)
-                let displayName = NSString.localizedUserNotificationString(forKey: "GROUP_CALL_FROM_USER",
-                                                                           arguments: [user?.displayname as Any])
+                let displayNameUNLocalizedString = NSString.localizedUserNotificationString(forKey: "GROUP_CALL_FROM_USER",
+                                                                                            arguments: [user?.displayname as Any])
+
+                // will fix app crash when CXCallUpdate accesses the localizedCallerName property because list of allowed classes for com.apple.callkit.callsourcehost service contains only NSString
+                let displayName = NSString(string: displayNameUNLocalizedString) as String
                 
                 MXLog.debug("[CallPresenter] processWidgetEvent: Report new incoming call with id: \(newUUID.uuidString)")
                 
@@ -338,6 +332,7 @@ class CallPresenter: NSObject {
             guard let uuid = self.jitsiCalls.first(where: { $0.value.widgetId == widget.widgetId })?.key else {
                 //  this Jitsi call is not managed by this class
                 MXLog.debug("[CallPresenter] processWidgetEvent: not managed Jitsi call: \(widget.widgetId)")
+                hangupUnhandledCallIfNeeded(widget)
                 return
             }
             MXLog.debug("[CallPresenter] processWidgetEvent: ended call with id: \(uuid.uuidString)")
@@ -495,12 +490,12 @@ class CallPresenter: NSObject {
         #if canImport(JitsiMeetSDK)
         JMCallKitProxy.removeListener(self)
         
-        guard let session = sessions.first else {
+        guard let sessionInfo = sessions.first else {
             return
         }
         
         if let widgetEventsListener = widgetEventsListener {
-            session.removeListener(widgetEventsListener)
+            sessionInfo.removeListener(widgetEventsListener)
         }
         widgetEventsListener = nil
         #endif
@@ -723,6 +718,15 @@ class CallPresenter: NSObject {
         uiOperationQueue.addOperation(operation)
     }
     
+    /// Hangs up current Jitsi call, if it is inactive and associated with given widget.
+    /// Should be used for calls that are not handled through JMCallKitProxy,
+    /// as these should be removed regardless.
+    private func hangupUnhandledCallIfNeeded(_ widget: Widget) {
+        guard !widget.isActive, widget.widgetId == jitsiVC?.widget.widgetId else { return }
+        
+        MXLog.debug("[CallPresenter] hangupUnhandledCallIfNeeded: ending call with Widget id: %@", widget.widgetId)
+        endActiveJitsiCall()
+    }
 }
 
 //  MARK: - MXKCallViewControllerDelegate
@@ -824,7 +828,7 @@ extension CallPresenter: JMCallKitListener {
         
     }
     
-    func performAnswerCall(UUID: UUID) {
+    func performAnswerCall(with UUID: UUID) {
         guard let widget = jitsiCalls[UUID] else {
             return
         }
@@ -832,7 +836,7 @@ extension CallPresenter: JMCallKitListener {
         displayJitsiCall(withWidget: widget)
     }
     
-    func performEndCall(UUID: UUID) {
+    func performEndCall(with UUID: UUID) {
         guard let widget = jitsiCalls[UUID] else {
             return
         }
@@ -847,7 +851,7 @@ extension CallPresenter: JMCallKitListener {
         }
     }
     
-    func performSetMutedCall(UUID: UUID, isMuted: Bool) {
+    func performSetMutedCall(with UUID: UUID, isMuted: Bool) {
         guard let widget = jitsiCalls[UUID] else {
             return
         }
@@ -858,20 +862,20 @@ extension CallPresenter: JMCallKitListener {
         }
     }
     
-    func performStartCall(UUID: UUID, isVideo: Bool) {
-        
+    func performStartCall(with UUID: UUID, isVideo: Bool) {
+
     }
     
-    func providerDidActivateAudioSession(session: AVAudioSession) {
-        
+    func providerDidActivateAudioSession(with session: AVAudioSession) {
+
     }
 
-    func providerDidDeactivateAudioSession(session: AVAudioSession) {
-        
+    func providerDidDeactivateAudioSession(with session: AVAudioSession) {
+
     }
 
-    func providerTimedOutPerformingAction(action: CXAction) {
-        
+    func providerTimedOutPerformingAction(with action: CXAction) {
+
     }
     
 }

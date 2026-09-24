@@ -1,25 +1,15 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import Foundation
 import DesignKit
+import Foundation
 
 // Conformance of MXPushRule to the abstraction `NotificationPushRule` for use in `NotificationSettingsViewModel`.
 extension MXPushRule: NotificationPushRuleType {
-    
     /// Given a rule, check it match the actions in the static definition.
     /// - Parameter standardActions: The standard actions to match against.
     /// - Returns: Wether `this` rule matches the standard actions.
@@ -27,7 +17,7 @@ extension MXPushRule: NotificationPushRuleType {
         guard let standardActions = standardActions else {
             return false
         }
-        if !enabled && standardActions == .disabled {
+        if !enabled, standardActions == .disabled {
             return true
         }
         
@@ -40,6 +30,10 @@ extension MXPushRule: NotificationPushRuleType {
             return true
         }
         return false
+    }
+    
+    var ruleActions: NotificationActions? {
+        .init(notify: notify, highlight: highlight, sound: sound)
     }
     
     private func getAction(actionType: MXPushRuleActionType, tweakType: String? = nil) -> MXPushRuleAction? {
@@ -75,10 +69,14 @@ extension MXPushRule: NotificationPushRuleType {
     }
     
     var notify: Bool {
-        return getAction(actionType: MXPushRuleActionTypeNotify) != nil
+        getAction(actionType: MXPushRuleActionTypeNotify) != nil
     }
     
     var dontNotify: Bool {
-        return getAction(actionType: MXPushRuleActionTypeDontNotify) != nil
+        guard let actions = actions as? [MXPushRuleAction] else {
+            return true
+        }
+        // Support for MSC3987: The dont_notify push rule action is deprecated and replaced by an empty actions list.
+        return actions.isEmpty || getAction(actionType: MXPushRuleActionTypeDontNotify) != nil
     }
 }

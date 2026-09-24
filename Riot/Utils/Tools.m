@@ -1,22 +1,14 @@
 /*
- Copyright 2016 OpenMarket Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2016 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "Tools.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 @implementation Tools
 
@@ -36,7 +28,11 @@
                 presenceText = [VectorL10n roomParticipantsIdle];
                 break;
                 
-            case MXPresenceUnknown: // Do like matrix-js-sdk
+            case MXPresenceUnknown:
+                // Fix https://github.com/vector-im/element-ios/issues/6597
+                // Return nil because we don't want to display anything if the status is unknown
+                return nil;
+                
             case MXPresenceOffline:
                 presenceText = [VectorL10n roomParticipantsOffline];
                 break;
@@ -66,11 +62,11 @@
 {
     BOOL isUniversalLink = NO;
     
-    for (NSString *matrixPermalinkHost in BuildSettings.matrixPermalinkPaths)
+    for (NSString *matrixPermalinkHost in BuildSettings.permalinkSupportedHosts)
     {
         if ([url.host isEqualToString:matrixPermalinkHost])
         {
-            NSArray<NSString*> *hostPaths = BuildSettings.matrixPermalinkPaths[matrixPermalinkHost];
+            NSArray<NSString*> *hostPaths = BuildSettings.permalinkSupportedHosts[matrixPermalinkHost];
             if (hostPaths.count)
             {
                 // iOS Patch: fix urls before using it
@@ -113,29 +109,11 @@
     return fixedURL;
 }
 
-#pragma mark - String utilities
+#pragma mark - Time utilities
 
-+ (NSAttributedString *)setTextColorAlpha:(CGFloat)alpha inAttributedString:(NSAttributedString*)attributedString
++ (uint64_t)durationInMsFromDays:(uint)days
 {
-    NSMutableAttributedString *string = [[NSMutableAttributedString alloc] initWithAttributedString:attributedString];
-
-    // Check all attributes one by one
-    [string enumerateAttributesInRange:NSMakeRange(0, attributedString.length) options:0 usingBlock:^(NSDictionary *attrs, NSRange range, BOOL *stop)
-     {
-         // Replace only colored texts
-         if (attrs[NSForegroundColorAttributeName])
-         {
-             UIColor *color = attrs[NSForegroundColorAttributeName];
-             color = [color colorWithAlphaComponent:0.2];
-
-             NSMutableDictionary *newAttrs = [NSMutableDictionary dictionaryWithDictionary:attrs];
-             newAttrs[NSForegroundColorAttributeName] = color;
-
-             [string setAttributes:newAttrs range:range];
-         }
-     }];
-
-    return string;
+    return days * (uint64_t)(86400000);
 }
 
 @end

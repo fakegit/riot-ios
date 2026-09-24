@@ -1,24 +1,17 @@
 /*
- Copyright 2017 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 OpenMarket Ltd
+Copyright 2017 Vector Creations Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "ContactsDataSource.h"
 #import "ContactTableViewCell.h"
 
 @class ContactsTableViewController;
+@class AnalyticsScreenTracker;
 
 /**
  `ContactsTableViewController` delegate.
@@ -67,15 +60,23 @@
 @property (weak, nonatomic) IBOutlet UITableView *contactsTableView;
 
 /**
+ When true, the footer that allows the user to enable local contacts sync will
+ never be shown. When false, the footer will shown when the user hasn't enabled
+ contact sync.
+ */
+@property (nonatomic) BOOL disableFindYourContactsFooter;
+
+/**
+ Indicates when there's an active search. This is used to determine when the contacts
+ access footer should be hidden in order to list the results from the server.
+ */
+@property (nonatomic) BOOL contactsAreFilteredWithSearch;
+
+/**
  If YES, the table view will scroll at the top on the next data source refresh.
  It comes back to NO after each refresh.
  */
 @property (nonatomic) BOOL shouldScrollToTopOnRefresh;
-
-/**
- The analytics instance screen name (Default is "ContactsTable").
- */
-@property (nonatomic) NSString *screenName;
 
 /**
  Callback used to take into account the change of the user interface theme.
@@ -109,7 +110,12 @@
 /**
  The delegate for the view controller.
  */
-@property (nonatomic) id<ContactsTableViewControllerDelegate> contactsTableViewControllerDelegate;
+@property (nonatomic, weak) id<ContactsTableViewControllerDelegate> contactsTableViewControllerDelegate;
+
+/**
+ The screen timer used for analytics if they've been enabled. The default value is nil.
+ */
+@property (nonatomic) AnalyticsScreenTracker *screenTracker;
 
 @end
 

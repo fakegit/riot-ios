@@ -24,9 +24,10 @@ protocol KeyVerificationSelfVerifyWaitViewModelViewDelegate: AnyObject {
 
 protocol KeyVerificationSelfVerifyWaitViewModelCoordinatorDelegate: AnyObject {
     func keyVerificationSelfVerifyWaitViewModel(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType, didAcceptKeyVerificationRequest keyVerificationRequest: MXKeyVerificationRequest)
-    func keyVerificationSelfVerifyWaitViewModel(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType, didAcceptIncomingSASTransaction incomingSASTransaction: MXIncomingSASTransaction)
+    func keyVerificationSelfVerifyWaitViewModel(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType, didAcceptIncomingSASTransaction incomingSASTransaction: MXSASTransaction)
     func keyVerificationSelfVerifyWaitViewModelDidCancel(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType)
     func keyVerificationSelfVerifyWaitViewModel(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType, wantsToRecoverSecretsWith secretsRecoveryMode: SecretsRecoveryMode)
+    func keyVerificationSelfVerifyWaitViewModelWantsToResetSecrets(_ viewModel: KeyVerificationSelfVerifyWaitViewModelType)
 }
 
 /// Protocol describing the view model used by `KeyVerificationSelfVerifyWaitViewController`

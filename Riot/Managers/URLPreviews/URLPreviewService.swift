@@ -1,20 +1,12 @@
 //
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
+import AFNetworking
 
 enum URLPreviewServiceError: Error {
     case missingResponse
@@ -74,7 +66,10 @@ class URLPreviewService: NSObject {
                 success(previewData)
             }
             
-        }, failure: failure)
+        }, failure: { error in
+            self.checkForDisabledAPI(in: error)
+            failure(error)
+        })
     }
     
     /// Removes any cached preview data that has expired.
@@ -82,9 +77,11 @@ class URLPreviewService: NSObject {
         store.removeExpiredItems()
     }
     
-    /// Deletes all cached preview data and closed previews from the store.
+    /// Deletes all cached preview data and closed previews from the store,
+    /// re-enabling URL previews if they have been disabled by `checkForDisabledAPI`.
     func clearStore() {
         store.deleteAll()
+        MXKAppSettings.standard().enableBubbleComponentLinkDetection = true
     }
     
     /// Store the `eventId` and `roomId` of a closed preview.
@@ -155,5 +152,21 @@ class URLPreviewService: NSObject {
         components?.fragment = nil
         
         return components?.url ?? url
+    }
+    
+    /// Checks an error returned from `MXRestClient` to see whether the previews API
+    /// has been disabled on the homeserver. If this is true, link detection will be disabled
+    /// to prevent further requests being made and stop any previews loaders being presented.
+    private func checkForDisabledAPI(in error: Error?) {
+        // The error we're looking for is a generic 404 and not a matrix error.
+        guard
+            !MXError.isMXError(error),
+            let response = MXHTTPOperation.urlResponse(fromError: error)
+        else { return }
+        
+        if response.statusCode == 404 {
+            MXLog.debug("[URLPreviewService] Disabling link detection as homeserver does not support URL previews.")
+            MXKAppSettings.standard().enableBubbleComponentLinkDetection = false
+        }
     }
 }

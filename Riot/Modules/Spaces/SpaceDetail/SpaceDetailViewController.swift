@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -34,6 +25,7 @@ class SpaceDetailViewController: UIViewController {
     private var errorPresenter: MXKErrorPresentation!
     private var activityPresenter: ActivityIndicatorPresenter!
     private var isJoined: Bool = false
+    private var showCancel: Bool = true
 
     // MARK: Outlets
 
@@ -60,11 +52,12 @@ class SpaceDetailViewController: UIViewController {
 
     // MARK: - Setup
     
-    class func instantiate(mediaManager: MXMediaManager, viewModel: SpaceDetailViewModelType!) -> SpaceDetailViewController {
+    class func instantiate(mediaManager: MXMediaManager, viewModel: SpaceDetailViewModelType!, showCancel: Bool) -> SpaceDetailViewController {
         let viewController = StoryboardScene.SpaceDetailViewController.initialScene.instantiate()
         viewController.mediaManager = mediaManager
         viewController.viewModel = viewModel
         viewController.theme = ThemeService.shared().theme
+        viewController.showCancel = showCancel
         return viewController
     }
     
@@ -176,6 +169,7 @@ class SpaceDetailViewController: UIViewController {
     private func setupViews() {
         self.closeButton.layer.masksToBounds = true
         self.closeButton.layer.cornerRadius = self.closeButton.bounds.height / 2
+        self.closeButton.isHidden = !self.showCancel
         
         self.setup(button: self.joinButton, withTitle: VectorL10n.join)
         self.setup(button: self.acceptButton, withTitle: VectorL10n.accept)
@@ -186,7 +180,7 @@ class SpaceDetailViewController: UIViewController {
     private func setup(button: UIButton, withTitle title: String) {
         button.layer.masksToBounds = true
         button.layer.cornerRadius = 8.0
-        button.setTitle(title.uppercased(), for: .normal)
+        button.setTitle(title, for: .normal)
     }
     
     private func render(viewState: SpaceDetailViewState) {
@@ -209,17 +203,24 @@ class SpaceDetailViewController: UIViewController {
         
         switch parameters.membership {
         case .invite:
+            self.title = VectorL10n.spaceInviteNavTitle
             self.joinButton.isHidden = true
             self.inviteActionPanel.isHidden = false
         case .join:
+            self.title = VectorL10n.spaceDetailNavTitle
             self.inviterPanelHeight.constant = 0
             self.joinButton.setTitle(VectorL10n.open, for: .normal)
             self.isJoined = true
         default:
+            self.title = VectorL10n.spaceDetailNavTitle
             self.inviterPanelHeight.constant = 0
         }
         
-        let avatarViewData = AvatarViewData(matrixItemId: parameters.spaceId, displayName: parameters.displayName, avatarUrl: parameters.avatarUrl, mediaManager: self.mediaManager, fallbackImage: .matrixItem(parameters.spaceId, parameters.displayName))
+        let avatarViewData = AvatarViewData(matrixItemId: parameters.spaceId,
+                                            displayName: parameters.displayName,
+                                            avatarUrl: parameters.avatarUrl,
+                                            mediaManager: self.mediaManager,
+                                            fallbackImage: .matrixItem(parameters.spaceId, parameters.displayName))
 
         self.titleLabel.text = parameters.displayName
         self.avatarView.fill(with: avatarViewData)
@@ -230,6 +231,9 @@ class SpaceDetailViewController: UIViewController {
         let membersCount = parameters.membersCount
         let membersString = membersCount == 1 ? VectorL10n.roomTitleOneMember : VectorL10n.roomTitleMembers("\(membersCount)")
         self.spaceTypeLabel.text = "\(joinRuleString) · \(membersString)"
+        
+        let joinRuleIcon = parameters.joinRule == .public ? Asset.Images.spaceTypeIcon : Asset.Images.spacePrivateIcon
+        self.spaceTypeIconView.image = joinRuleIcon.image
         
         self.inviterIdLabel.text = parameters.inviterId
         if let inviterId = parameters.inviterId {

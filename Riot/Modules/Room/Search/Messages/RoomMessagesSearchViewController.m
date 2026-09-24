@@ -1,18 +1,10 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomMessagesSearchViewController.h"
@@ -26,7 +18,7 @@
 #import "RoomIncomingAttachmentBubbleCell.h"
 #import "RoomIncomingTextMsgBubbleCell.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 @interface RoomMessagesSearchViewController ()
 {
@@ -110,9 +102,6 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"RoomMessagesSearch"];
 
     // Observe kAppDelegateDidTapStatusBarNotificationObserver.
     kAppDelegateDidTapStatusBarNotificationObserver = [[NSNotificationCenter defaultCenter] addObserverForName:kAppDelegateDidTapStatusBarNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notif) {
@@ -209,18 +198,16 @@
 {
     // Data in the cells are actually Vector RoomBubbleCellData
     RoomBubbleCellData *cellData = (RoomBubbleCellData*)[self.dataSource cellDataAtIndex:indexPath.row];
-    _selectedEvent = cellData.bubbleComponents[0].event;
+    MXEvent *event = cellData.bubbleComponents[0].event;
+    
+    RoomSearchViewController *roomSearchViewController = (RoomSearchViewController*)self.parentViewController;
     
     // Hide the keyboard handled by the search text input which belongs to RoomSearchViewController
-    [((RoomSearchViewController*)self.parentViewController).searchBar resignFirstResponder];
+    [roomSearchViewController.searchBar resignFirstResponder];
     
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     
-    // Make the RoomSearchViewController (that contains this VC) open the RoomViewController
-    [self.parentViewController performSegueWithIdentifier:@"showTimeline" sender:self];
-    
-    // Reset the selected event. RoomSearchViewController got it when here
-    _selectedEvent = nil;
+    [roomSearchViewController selectEvent:event];
 }
 
 @end

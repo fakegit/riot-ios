@@ -1,17 +1,8 @@
 /*
- Copyright 2018 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2018-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import Foundation
@@ -22,10 +13,17 @@ final class RiotSettings: NSObject {
     
     // MARK: - Constants
     
-    private enum UserDefaultsKeys {
-        static let enableCrashReport = "enableCrashReport"
+    public enum UserDefaultsKeys {
+        static let enableAnalytics = "enableAnalytics"
+        static let matomoAnalytics = "enableCrashReport"
         static let notificationsShowDecryptedContent = "showDecryptedContent"
         static let allowStunServerFallback = "allowStunServerFallback"
+        static let pinRoomsWithMissedNotificationsOnHome = "pinRoomsWithMissedNotif"
+        static let pinRoomsWithUnreadMessagesOnHome = "pinRoomsWithUnread"
+        static let showAllRoomsInHomeSpace = "showAllRoomsInHomeSpace"
+        static let enableUISIAutoReporting = "enableUISIAutoReporting"
+        static let enableLiveLocationSharing = "enableLiveLocationSharing"
+        static let showIPAddressesInSessionsManager = "showIPAddressesInSessionsManager"
     }
     
     static let shared = RiotSettings()
@@ -74,39 +72,63 @@ final class RiotSettings: NSObject {
         return RiotSettings.defaults.object(forKey: UserDefaultsKeys.notificationsShowDecryptedContent) != nil
     }
     
+    /// Indicate if notifications should be shown whilst the app is in the foreground.
+    @UserDefault(key: "showInAppNotifications", defaultValue: true, storage: defaults)
+    var showInAppNotifications
+    
     /// Indicate if encrypted messages content should be displayed in notifications.
     @UserDefault(key: UserDefaultsKeys.notificationsShowDecryptedContent, defaultValue: false, storage: defaults)
     var showDecryptedContentInNotifications
     
     /// Indicate if rooms with missed notifications should be displayed first on home screen.
-    @UserDefault(key: "pinRoomsWithMissedNotif", defaultValue: false, storage: defaults)
+    @UserDefault(key: UserDefaultsKeys.pinRoomsWithMissedNotificationsOnHome, defaultValue: false, storage: defaults)
     var pinRoomsWithMissedNotificationsOnHome
     
     /// Indicate if rooms with unread messages should be displayed first on home screen.
-    @UserDefault(key: "pinRoomsWithUnread", defaultValue: false, storage: defaults)
+    @UserDefault(key: UserDefaultsKeys.pinRoomsWithUnreadMessagesOnHome, defaultValue: false, storage: defaults)
     var pinRoomsWithUnreadMessagesOnHome
-    
-    /// Indicate to show Not Safe For Work public rooms.
-    @UserDefault(key: "showNSFWPublicRooms", defaultValue: false, storage: defaults)
-    var showNSFWPublicRooms
     
     // MARK: User interface
     
     @UserDefault<String?>(key: "userInterfaceTheme", defaultValue: nil, storage: defaults)
     var userInterfaceTheme
     
-    // MARK: Other
+    // MARK: Analytics & Rageshakes
     
-    /// Indicate if `enableCrashReport` settings has been set once.
-    var isEnableCrashReportHasBeenSetOnce: Bool {
-        return RiotSettings.defaults.object(forKey: UserDefaultsKeys.enableCrashReport) != nil
+    /// Whether the user was previously shown the Matomo analytics prompt.
+    var hasSeenAnalyticsPrompt: Bool {
+        RiotSettings.defaults.object(forKey: UserDefaultsKeys.enableAnalytics) != nil
     }
     
-    @UserDefault(key: UserDefaultsKeys.enableCrashReport, defaultValue: false, storage: defaults)
-    var enableCrashReport
+    /// Whether the user has both seen the Matomo analytics prompt and declined it.
+    var hasDeclinedMatomoAnalytics: Bool {
+        RiotSettings.defaults.object(forKey: UserDefaultsKeys.matomoAnalytics) != nil && !RiotSettings.defaults.bool(forKey: UserDefaultsKeys.matomoAnalytics)
+    }
+    
+    /// Whether the user previously accepted the Matomo analytics prompt.
+    /// This allows these users to be shown a different prompt to explain the changes.
+    var hasAcceptedMatomoAnalytics: Bool {
+        RiotSettings.defaults.bool(forKey: UserDefaultsKeys.matomoAnalytics)
+    }
+    
+    /// `true` when the user has opted in to send analytics.
+    @UserDefault(key: UserDefaultsKeys.enableAnalytics, defaultValue: false, storage: defaults)
+    var enableAnalytics
+    
+    /// Indicates if the device has already called identify for this session to PostHog.
+    /// This is separate to `enableAnalytics` as logging out will leave analytics
+    /// enabled but reset identification.
+    @UserDefault(key: "isIdentifiedForAnalytics", defaultValue: false, storage: defaults)
+    var isIdentifiedForAnalytics
     
     @UserDefault(key: "enableRageShake", defaultValue: false, storage: defaults)
     var enableRageShake
+    
+    // MARK: User
+    
+    /// A dictionary of dictionaries keyed by user ID for storage of the `UserSessionProperties` from any active `UserSession`s.
+    @UserDefault(key: "userSessionProperties", defaultValue: [:], storage: defaults)
+    var userSessionProperties: [String: [String: Any]]
     
     // MARK: Labs
     
@@ -114,6 +136,53 @@ final class RiotSettings: NSObject {
     @UserDefault(key: "enableRingingForGroupCalls", defaultValue: false, storage: defaults)
     var enableRingingForGroupCalls
     
+    /// Indicates if threads enabled in the timeline.
+    @UserDefault(key: "enableThreads", defaultValue: false, storage: defaults)
+    var enableThreads
+    
+    /// Indicates if threads should be forced enabled in the timeline.
+    @UserDefault(key: "forceThreadsEnabled", defaultValue: true, storage: defaults)
+    var forceThreadsEnabled
+
+    /// Indicates if auto reporting of decryption errors is enabled
+    @UserDefault(key: UserDefaultsKeys.enableUISIAutoReporting, defaultValue: BuildSettings.cryptoUISIAutoReportingEnabled, storage: defaults)
+    var enableUISIAutoReporting
+    
+    /// Indicates if live location sharing is enabled
+    @UserDefault(key: UserDefaultsKeys.enableLiveLocationSharing, defaultValue: false, storage: defaults)
+    var enableLiveLocationSharing {
+        didSet {
+            NotificationCenter.default.post(name: RiotSettings.didUpdateLiveLocationSharingActivation, object: self)
+        }
+    }
+
+    /// Flag indicating if the new session manager is enabled
+    @UserDefault(key: "enableNewSessionManager", defaultValue: false, storage: defaults)
+    var enableNewSessionManager
+
+    /// Flag indicating if the new client information feature is enabled
+    @UserDefault(key: "enableClientInformationFeature", defaultValue: false, storage: defaults)
+    var enableClientInformationFeature
+
+    /// Flag indicating if the wysiwyg composer feature is enabled
+    @UserDefault(key: "enableWysiwygComposer", defaultValue: false, storage: defaults)
+    var enableWysiwygComposer
+
+    @UserDefault(key: "enableWysiwygTextFormatting", defaultValue: true, storage: defaults)
+    var enableWysiwygTextFormatting
+    
+    /// Flag indicating if the IP addresses should be shown in the new device manager
+    @UserDefault(key: UserDefaultsKeys.showIPAddressesInSessionsManager, defaultValue: false, storage: defaults)
+    var showIPAddressesInSessionsManager
+    
+    /// Flag indicating if the voice broadcast feature is enabled
+    @UserDefault(key: "enableVoiceBroadcast", defaultValue: false, storage: defaults)
+    var enableVoiceBroadcast
+    
+    /// Flag indicating if we are using rust-based `MatrixCryptoSDK` instead of `MatrixSDK`'s internal crypto module
+    @UserDefault(key: "enableCryptoSDK", defaultValue: false, storage: defaults)
+    var enableCryptoSDK
+
     // MARK: Calls
     
     /// Indicate if `allowStunServerFallback` settings has been set once.
@@ -129,8 +198,8 @@ final class RiotSettings: NSObject {
     @UserDefault(key: "hideVerifyThisSessionAlert", defaultValue: false, storage: defaults)
     var hideVerifyThisSessionAlert
     
-    @UserDefault(key: "hideReviewSessionsAlert", defaultValue: false, storage: defaults)
-    var hideReviewSessionsAlert
+    @UserDefault(key: "showVerificationUpgradeAlert", defaultValue: false, storage: defaults)
+    var showVerificationUpgradeAlert
     
     @UserDefault(key: "matrixApps", defaultValue: false, storage: defaults)
     var matrixApps
@@ -139,6 +208,9 @@ final class RiotSettings: NSObject {
     
     @UserDefault(key: "roomsAllowToJoinPublicRooms", defaultValue: BuildSettings.roomsAllowToJoinPublicRooms, storage: defaults)
     var roomsAllowToJoinPublicRooms
+    
+    @UserDefault(key: UserDefaultsKeys.showAllRoomsInHomeSpace, defaultValue: true, storage: defaults)
+    var showAllRoomsInHomeSpace
     
     // MARK: - Room Screen
     
@@ -159,9 +231,24 @@ final class RiotSettings: NSObject {
     
     @UserDefault(key: "roomScreenAllowFilesAction", defaultValue: BuildSettings.roomScreenAllowFilesAction, storage: defaults)
     var roomScreenAllowFilesAction
-    
+        
     @UserDefault(key: "roomScreenShowsURLPreviews", defaultValue: true, storage: defaults)
     var roomScreenShowsURLPreviews
+    
+    @UserDefault(key: "roomScreenEnableMessageBubbles", defaultValue: BuildSettings.isRoomScreenEnableMessageBubblesByDefault, storage: defaults)
+    var roomScreenEnableMessageBubbles
+
+    var roomTimelineStyleIdentifier: RoomTimelineStyleIdentifier {
+        return self.roomScreenEnableMessageBubbles ? .bubble : .plain
+    }
+
+    /// A setting used to display the latest known display name and avatar in the timeline
+    /// for both the sender and target, rather than the profile at the time of the event.
+    ///
+    /// Note: this is set up from Room perspective, which means that if a user updates their profile after
+    /// leaving a Room, it will show up the latest profile used in the Room rather than the latest overall.
+    @UserDefault(key: "roomScreenUseOnlyLatestUserAvatarAndName", defaultValue: BuildSettings.roomScreenUseOnlyLatestUserAvatarAndName, storage: defaults)
+    var roomScreenUseOnlyLatestUserAvatarAndName
     
     // MARK: - Room Contextual Menu
     
@@ -219,26 +306,17 @@ final class RiotSettings: NSObject {
     @UserDefault(key: "homeScreenShowRoomsTab", defaultValue: BuildSettings.homeScreenShowRoomsTab, storage: defaults)
     var homeScreenShowRoomsTab
     
-    @UserDefault(key: "homeScreenShowCommunitiesTab", defaultValue: BuildSettings.homeScreenShowCommunitiesTab, storage: defaults)
-    var homeScreenShowCommunitiesTab
-    
     // MARK: General Settings
     
     @UserDefault(key: "settingsScreenShowChangePassword", defaultValue: BuildSettings.settingsScreenShowChangePassword, storage: defaults)
     var settingsScreenShowChangePassword
-    
-    @UserDefault(key: "settingsScreenShowInviteFriends", defaultValue: BuildSettings.settingsScreenShowInviteFriends, storage: defaults)
-    var settingsScreenShowInviteFriends
     
     @UserDefault(key: "settingsScreenShowEnableStunServerFallback", defaultValue: BuildSettings.settingsScreenShowEnableStunServerFallback, storage: defaults)
     var settingsScreenShowEnableStunServerFallback
     
     @UserDefault(key: "settingsScreenShowNotificationDecodedContentOption", defaultValue: BuildSettings.settingsScreenShowNotificationDecodedContentOption, storage: defaults)
     var settingsScreenShowNotificationDecodedContentOption
-    
-    @UserDefault(key: "settingsScreenShowNsfwRoomsOption", defaultValue: BuildSettings.settingsScreenShowNsfwRoomsOption, storage: defaults)
-    var settingsScreenShowNsfwRoomsOption
-    
+        
     @UserDefault(key: "settingsSecurityScreenShowSessions", defaultValue: BuildSettings.settingsSecurityScreenShowSessions, storage: defaults)
     var settingsSecurityScreenShowSessions
     
@@ -277,9 +355,6 @@ final class RiotSettings: NSObject {
     @UserDefault(key: "roomSettingsScreenShowAddressSettings", defaultValue: BuildSettings.roomSettingsScreenShowAddressSettings, storage: defaults)
     var roomSettingsScreenShowAddressSettings
     
-    @UserDefault(key: "roomSettingsScreenShowFlairSettings", defaultValue: BuildSettings.roomSettingsScreenShowFlairSettings, storage: defaults)
-    var roomSettingsScreenShowFlairSettings
-    
     @UserDefault(key: "roomSettingsScreenShowAdvancedSettings", defaultValue: BuildSettings.roomSettingsScreenShowAdvancedSettings, storage: defaults)
     var roomSettingsScreenShowAdvancedSettings
     
@@ -300,9 +375,33 @@ final class RiotSettings: NSObject {
     
     @UserDefault(key: "hideSpaceBetaAnnounce", defaultValue: false, storage: defaults)
     var hideSpaceBetaAnnounce
-    
+
+    @UserDefault(key: "threadsNoticeDisplayed", defaultValue: false, storage: defaults)
+    var threadsNoticeDisplayed
+
     // MARK: - Version check
     
     @UserDefault(key: "versionCheckNextDisplayDateTimeInterval", defaultValue: 0.0, storage: defaults)
     var versionCheckNextDisplayDateTimeInterval
+    
+    // MARK: - Migration banner
+    
+    /// The date before which the migration banner stays hidden after the user closed it. `nil` when never closed.
+    @UserDefault(key: "migrationBannerNextDisplayDate", storage: defaults)
+    var migrationBannerNextDisplayDate: Date?
+    
+    @UserDefault(key: "slideMenuRoomsCoachMessageHasBeenDisplayed", defaultValue: false, storage: defaults)
+    var slideMenuRoomsCoachMessageHasBeenDisplayed
+    
+    // MARK: - Metrics
+    
+    /// Number of spaces previously tracked by the `AnalyticsSpaceTracker` instance.
+    @UserDefault(key: "lastNumberOfTrackedSpaces", defaultValue: nil, storage: defaults)
+    var lastNumberOfTrackedSpaces: Int?
+    
+}
+
+// MARK: - RiotSettings notification constants
+extension RiotSettings {
+    public static let didUpdateLiveLocationSharingActivation = Notification.Name("RiotSettingsDidUpdateLiveLocationSharingActivation")
 }

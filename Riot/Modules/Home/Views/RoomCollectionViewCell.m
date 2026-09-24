@@ -1,17 +1,9 @@
 /*
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomCollectionViewCell.h"
@@ -19,7 +11,7 @@
 #import "AvatarGenerator.h"
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import "MXRoomSummary+Riot.h"
 #import "MXRoom+Riot.h"
@@ -33,10 +25,6 @@
 - (void)awakeFromNib
 {
     [super awakeFromNib];
-    
-    // Round room image view
-    [_roomAvatar.layer setCornerRadius:_roomAvatar.frame.size.width / 2];
-    _roomAvatar.clipsToBounds = YES;
     
     // Disable the user interaction on the room avatar.
     self.roomAvatar.userInteractionEnabled = NO;
@@ -52,6 +40,8 @@
     [path closePath]; // arrow top side
     arrowMaskLayer.path = path.CGPath;
     self.editionArrowView.layer.mask = arrowMaskLayer;
+    
+    self.isAccessibilityElement = YES;
 }
 
 - (void)customizeCollectionViewCellRendering
@@ -61,6 +51,7 @@
     self.roomTitle.textColor = ThemeService.shared.theme.textPrimaryColor;
     self.roomTitle1.textColor = ThemeService.shared.theme.textPrimaryColor;
     self.roomTitle2.textColor = ThemeService.shared.theme.textPrimaryColor;
+    self.presenceIndicatorView.borderColor = ThemeService.shared.theme.backgroundColor;
     
     self.editionArrowView.backgroundColor = ThemeService.shared.theme.headerBackgroundColor;
     
@@ -70,6 +61,9 @@
 - (void)layoutSubviews
 {
     [super layoutSubviews];
+    
+    [self.roomAvatar.layer setCornerRadius:self.roomAvatar.frame.size.width / 2.0];
+    [self.roomAvatar setClipsToBounds: YES];
 }
 
 - (void)render:(MXKCellData *)cellData
@@ -86,6 +80,8 @@
         self.roomTitle1.hidden = YES;
         self.roomTitle2.hidden = YES;
         
+        NSMutableString *accessibilityLabel = [self.roomTitle.text mutableCopy];
+        
         // Check whether the room display name is an alias to keep visible the HS.
         if ([MXTools isMatrixRoomAlias:roomCellData.roomDisplayname])
         {
@@ -97,12 +93,13 @@
                 self.roomTitle1.text = [roomCellData.roomDisplayname substringToIndex:range.location + 1];
                 self.roomTitle2.hidden = NO;
                 self.roomTitle2.text = [roomCellData.roomDisplayname substringFromIndex:range.location + 1];
+                accessibilityLabel = [[NSString stringWithFormat:@"%@, %@", self.roomTitle1.text, self.roomTitle2.text] mutableCopy];
             }
         }
         
         // Notify unreads and bing
-        if (roomCellData.roomSummary.room.summary.membership == MXMembershipInvite
-                 || roomCellData.roomSummary.room.sentStatus != RoomSentStatusOk)
+        if (roomCellData.roomSummary.membership == MXMembershipInvite
+                 || roomCellData.roomSummary.sentStatus != MXRoomSummarySentStatusOk)
         {
             self.badgeLabel.hidden = NO;
             self.badgeLabel.badgeColor = ThemeService.shared.theme.noticeColor;
@@ -118,6 +115,10 @@
                 self.badgeLabel.hidden = NO;
                 self.badgeLabel.badgeColor = roomCellData.highlightCount ? ThemeService.shared.theme.noticeColor : ThemeService.shared.theme.noticeSecondaryColor;
                 self.badgeLabel.text = roomCellData.notificationCountStringValue;
+                
+                NSUInteger count = roomCellData.notificationCount;
+                NSString *newMessagesLabel = count == 1 ? [VectorL10n roomNewMessageNotification:count] : [VectorL10n roomNewMessagesNotification:count];
+                [accessibilityLabel appendFormat:@", %@", newMessagesLabel];
             }
             
             // Use bold font for the room title
@@ -130,13 +131,20 @@
             
         }
         
-        if (roomCellData.roomSummary)
+        self.accessibilityLabel = accessibilityLabel;
+        
+        [self.roomAvatar vc_setRoomAvatarImageWith:roomCellData.avatarUrl
+                                            roomId:roomCellData.roomIdentifier
+                                       displayName:roomCellData.roomDisplayname
+                                      mediaManager:roomCellData.mxSession.mediaManager];
+
+        if (roomCellData.directUserId)
         {
-            [self.roomAvatar vc_setRoomAvatarImageWith:roomCellData.roomSummary.avatar displayName:roomCellData.roomSummary.displayname mediaManager:roomCellData.roomSummary.mxSession.mediaManager];
+            [self.presenceIndicatorView configureWithUserId:roomCellData.directUserId presence:roomCellData.presence];
         }
         else
         {
-            [self.roomAvatar vc_setRoomAvatarImageWith:roomCellData.spaceChildInfo.avatarUrl displayName:roomCellData.spaceChildInfo.displayName mediaManager:roomCellData.recentsDataSource.mxSession.mediaManager];
+            [self.presenceIndicatorView stopListeningPresenceUpdates];
         }
     }
 }
@@ -160,7 +168,9 @@
 - (void)prepareForReuse
 {
     [super prepareForReuse];
-    
+
+    [self.presenceIndicatorView stopListeningPresenceUpdates];
+
     // Remove all gesture recognizers
     while (self.gestureRecognizers.count)
     {
@@ -176,11 +186,7 @@
 
 - (NSString*)roomId
 {
-    if (roomCellData)
-    {
-        return roomCellData.spaceChildInfo ? roomCellData.spaceChildInfo.childRoomId : roomCellData.roomSummary.roomId;
-    }
-    return nil;
+    return roomCellData.roomIdentifier;
 }
 
 @end

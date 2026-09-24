@@ -21,7 +21,7 @@ platform :ios do
 
   before_all do
     # Ensure used Xcode version
-    xcversion(version: "~> 12.1")
+    xcversion(version: "26.2")
   end
 
   #### Public ####
@@ -38,15 +38,20 @@ platform :ios do
 
   desc "Builds an ipa for the App Store"
   lane :app_store do |options|
+    UI.user_error!("'SENTRY_AUTH_TOKEN' environment variable should be set to use this lane, see Passbolt") unless !ENV["SENTRY_AUTH_TOKEN"].to_s.empty?
+    sentry_check_cli_installed
+
     if !options.has_key?(:build_number)
       build_number = generate_build_number()
       options = { build_number: build_number }.merge(options)
     end
     build_release(options)
+    upload_dsyms_to_sentry
   end
 
   desc "Builds an Alpha ipa for pull request branches"
   lane :alpha do
+    # Check we have all the tokens and tools necessary
     UI.user_error!("'DIAWI_API_TOKEN' environment variable should be set to use this lane") unless !ENV["DIAWI_API_TOKEN"].to_s.empty?
             
     # Generate the "Alpha" app variant    
@@ -64,7 +69,8 @@ platform :ios do
     # Upload to Diawi
     diawi(
       token: ENV["DIAWI_API_TOKEN"],
-      wall_of_apps: false
+      wall_of_apps: false,
+      file: lane_context[SharedValues::IPA_OUTPUT_PATH]
     )
 
     # Get the Diawi link from Diawi action shared value
@@ -97,27 +103,6 @@ platform :ios do
   end
 
 
-  desc "Point MatrixKit and MatrixSDK to the related branches if such ones exist"
-  lane :point_dependencies_to_related_branches do
-    current_branch = mx_git_branch
-    UI.message("Current branch: #{current_branch}")
-    if current_branch.start_with?("release/")
-        point_dependencies_to_pending_releases
-    else
-        point_dependencies_to_same_feature
-    end
-  end
-
-  desc "Point MatrixKit and MatrixSDK to their respective release/*/release branch if they exist, master otherwise"
-  lane :point_dependencies_to_pending_releases do
-    edit_podfile(branch_pattern: "release/*/release", default_branch: "master")
-  end
-
-  desc "Point MatrixKit and MatrixSDK to the branch with the same name as the current branch if such one exist, develop otherwise"
-  lane :point_dependencies_to_same_feature do
-    edit_podfile(branch_pattern: mx_git_branch) unless mx_git_branch.to_s.empty?
-  end
-
   desc "Use an app variant. An app variant overwrite default project configuration or ressource files with custom values"
   lane :setup_app_variant do |options|
     appVariantScript = "../Variants/setup_app_variant.sh"    
@@ -148,8 +133,18 @@ platform :ios do
 
   desc "Run tests"
   lane :test do
-    xcodegen(spec: "project.yml")
     cocoapods
+
+    run_tests(
+      workspace: "Riot.xcworkspace",
+      scheme: "RiotSwiftUI",
+      code_coverage: true,
+      # Test result configuration
+      result_bundle: true,
+      output_directory: "./build/test",
+      output_files: "riot.swiftui.unit.test.html,riot.swiftui.unit.test.report.junit.xml",
+      open_report: !is_ci?
+    )
 
     run_tests(
       workspace: "Riot.xcworkspace",
@@ -158,7 +153,43 @@ platform :ios do
       # Test result configuration
       result_bundle: true,
       output_directory: "./build/test",
+      output_files: "riot.unit.test.html,riot.unit.test.report.junit.xml",
       open_report: !is_ci?
+    )
+
+    slather(
+      cobertura_xml: true,
+      output_directory: "./build/test",
+      workspace: "Riot.xcworkspace",
+      proj: "Riot.xcodeproj",
+      scheme: "Riot",
+      binary_basename: "Element",
+    )
+  end
+  
+  desc "Run UI tests"
+  lane :uitest do
+    cocoapods
+    
+    run_tests(
+      workspace: "Riot.xcworkspace",
+      scheme: "RiotSwiftUITests",
+      device: "iPhone 15",
+      code_coverage: true,
+      # Test result configuration
+      result_bundle: true,
+      output_directory: "./build/test",
+      output_files: "riot.swiftui.ui.test.html,riot.swiftui.ui.test.report.junit.xml",
+      open_report: !is_ci?
+    )
+
+    slather(
+      cobertura_xml: true,
+      output_directory: "./build/test",
+      workspace: "Riot.xcworkspace",
+      proj: "Riot.xcodeproj",
+      scheme: "RiotSwiftUITests",
+      binary_basename: "RiotSwiftUI",
     )
   end
 
@@ -167,7 +198,19 @@ platform :ios do
 
   desc "Download App Store or Ad-Hoc provisioning profiles"
   private_lane :build_release do |options|
-    UI.user_error!("'APPLE_ID' environment variable should be set to use this lane") unless !ENV["APPLE_ID"].to_s.empty?
+    if is_ci
+      UI.user_error!("'APPSTORECONNECT_KEY_ID' environment variable should be set to use this lane") unless !ENV["APPSTORECONNECT_KEY_ID"].to_s.empty?
+      UI.user_error!("'APPSTORECONNECT_KEY_ISSUER_ID' environment variable should be set to use this lane") unless !ENV["APPSTORECONNECT_KEY_ISSUER_ID"].to_s.empty?
+      UI.user_error!("'APPSTORECONNECT_KEY_CONTENT' environment variable should be set to use this lane") unless !ENV["APPSTORECONNECT_KEY_CONTENT"].to_s.empty?
+      
+      app_store_connect_api_key(
+        key_id: ENV["APPSTORECONNECT_KEY_ID"],
+        issuer_id: ENV["APPSTORECONNECT_KEY_ISSUER_ID"],
+        key_content: ENV["APPSTORECONNECT_KEY_CONTENT"]
+      )
+    else
+      UI.user_error!("'APPLE_ID' environment variable should be set to use this lane") unless !ENV["APPLE_ID"].to_s.empty?
+    end
 
     build_number = options[:build_number]
     UI.user_error!("'build_number' parameter is missing") unless !build_number.to_s.empty?
@@ -194,6 +237,8 @@ platform :ios do
     # Generate xcodebuild additional arguments
     xcargs_hash = {
       "GCC_PREPROCESSOR_DEFINITIONS" => "$(GCC_PREPROCESSOR_DEFINITIONS) #{additional_preprocessor_definitions}",
+      # Fix XCode 14 code signing issues for Swift packages containing resources bundles.
+      "CODE_SIGN_STYLE" => "Manual",
     }
 
     xcargs = xcargs_hash.map { |k, v| "#{k}=#{v.shellescape}" }.join(" ")
@@ -203,7 +248,7 @@ platform :ios do
     
     # Clear derived data
     clear_derived_data(derived_data_path: ENV["DERIVED_DATA_PATH"])
-
+    
     # Setup project provisioning profiles
     download_provisioning_profiles(adhoc: adhoc)
     disable_automatic_code_signing
@@ -222,12 +267,14 @@ platform :ios do
       share_extension_provisioning_profile = ENV["ADHOC_SHARE_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
       siri_intents_provisioning_profile = ENV["ADHOC_SIRI_INTENTS_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
       nse_provisioning_profile = ENV["ADHOC_NSE_PROVISIONING_PROFILE_SPECIFIER"]
+      broadcast_upload_extension_provisioning_profile = ENV["ADHOC_BROADCAST_UPLOAD_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
     else
       export_method = "app-store"
       main_provisioning_profile = ENV["APPSTORE_MAIN_PROVISIONING_PROFILE_SPECIFIER"]
       share_extension_provisioning_profile = ENV["APPSTORE_SHARE_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
       siri_intents_provisioning_profile = ENV["APPSTORE_SIRI_INTENTS_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
       nse_provisioning_profile = ENV["APPSTORE_NSE_PROVISIONING_PROFILE_SPECIFIER"]
+      broadcast_upload_extension_provisioning_profile = ENV["APPSTORE_BROADCAST_UPLOAD_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
     end
 
     # Build app and create ipa
@@ -253,6 +300,7 @@ platform :ios do
           ENV["SHARE_EXTENSION_BUNDLE_ID"] => share_extension_provisioning_profile,
           ENV["NSE_BUNDLE_ID"] => nse_provisioning_profile,
           ENV["SIRI_INTENTS_EXTENSION_BUNDLE_ID"] => siri_intents_provisioning_profile,
+          ENV["BROADCAST_UPLOAD_EXTENSION_BUNDLE_ID"] => broadcast_upload_extension_provisioning_profile,
         },
         iCloudContainerEnvironment: "Production",
       },
@@ -272,6 +320,7 @@ platform :ios do
     share_extension_provisioning_name = adhoc ? ENV["ADHOC_SHARE_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"] : ENV["APPSTORE_SHARE_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
     siri_intents_provisioning_name = adhoc ? ENV["ADHOC_SIRI_INTENTS_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"] : ENV["APPSTORE_SIRI_INTENTS_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
     notification_service_extension_provisioning_name = adhoc ? ENV["ADHOC_NSE_PROVISIONING_PROFILE_SPECIFIER"] : ENV["APPSTORE_NSE_PROVISIONING_PROFILE_SPECIFIER"]
+    broadcast_upload_extension_provisioning_name = adhoc ? ENV["ADHOC_BROADCAST_UPLOAD_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"] : ENV["APPSTORE_BROADCAST_UPLOAD_EXTENSION_PROVISIONING_PROFILE_SPECIFIER"]
 
     # Main application
     get_provisioning_profile(
@@ -317,6 +366,17 @@ platform :ios do
       filename: ENV["NSE_PROVISIONING_PROFILE_FILENAME"],
       readonly: true,
     )
+    # Broadcast Upload Extension
+    get_provisioning_profile(
+      app_identifier: ENV["BROADCAST_UPLOAD_EXTENSION_BUNDLE_ID"],
+      provisioning_name: broadcast_upload_extension_provisioning_name,
+      ignore_profiles_with_different_name: true,
+      adhoc: adhoc,
+      skip_certificate_verification: skip_certificate_verification,
+      output_path: output_path,
+      filename: ENV["BROADCAST_UPLOAD_EXTENSION_PROVISIONING_PROFILE_FILENAME"],
+      readonly: true,
+    )
   end
 
   desc "Update provisioning profiles for each target"
@@ -353,6 +413,13 @@ platform :ios do
       target_filter: ENV["NSE_TARGET"],
       build_configuration: build_configuration,
     )
+    # Broadcast Upload Extension
+    update_project_provisioning(
+      xcodeproj: xcodeproj,
+      profile: "#{provisioning_profiles_path}#{ENV["BROADCAST_UPLOAD_EXTENSION_PROVISIONING_PROFILE_FILENAME"]}",
+      target_filter: ENV["BROADCAST_UPLOAD_EXTENSION_TARGET"],
+      build_configuration: build_configuration,
+    )
   end
 
   desc "Update application build number for all targets"
@@ -383,36 +450,19 @@ platform :ios do
     preprocessor_definitions
   end
 
-  desc "Edit the Podfile in order to point MatrixKit and MatrixSDK to the appropriate branches."
-  private_lane :edit_podfile do |options|
-    require 'net/http'
+  desc "Upload dsym files to Sentry to symbolicate crashes"
+  private_lane :upload_dsyms_to_sentry do
+    UI.user_error!("'SENTRY_AUTH_TOKEN' environment variable should be set to use this lane") unless !ENV["SENTRY_AUTH_TOKEN"].to_s.empty?
 
-    branch_pattern = options[:branch_pattern]
-    kit_slug = "matrix-org/matrix-ios-kit"
-    sdk_slug = "matrix-org/matrix-ios-sdk"
-
-    default_branch = options[:default_branch] || 'develop'
-    kit_branch = find_branch(kit_slug, branch_pattern) || default_branch
-    sdk_branch = find_branch(sdk_slug, branch_pattern) || default_branch
-
-    kit_spec = { git: 'https://github.com/matrix-org/matrix-ios-kit.git', branch: kit_branch }
-    kit_podspec = { podspec: 'MatrixKit.edited.podspec' }
-    sdk_spec = { git: 'https://github.com/matrix-org/matrix-ios-sdk.git', branch: sdk_branch }
-
-    UI.message("✏️ Making a local copy of MatrixKit.podspec from the \`#{kit_branch}\` branch...")
-    podspec_content = Net::HTTP.get(URI("https://raw.githubusercontent.com/#{kit_slug}/#{kit_branch}/MatrixKit.podspec"))
-
-    UI.message "✏️ Editing local MatrixKit podspec to remove version constaint on 'MatrixSDK*' dependencies..."
-    podspec_content.gsub!(%r{(\.dependency\s+(['"])MatrixSDK(\/[^'"]+)?\2).*$}, '\1')
-    podspec_content.gsub!(%r{(\.source\s*=\s*).*$}, "\\1#{kit_spec}")
-    File.write('../MatrixKit.edited.podspec', podspec_content) # current dir is 'fastlane/' hence the '../'
-    UI.command_output("Content of MatrixKit.edited.podspec:\n" + podspec_content)
-
-    UI.message "✏️ Modify Podfile to point MatrixKit to local podspec and `MatrixSDK/*` to \`#{sdk_branch}\` branch..."
-    podfile_content = File.read('../Podfile') # current dir is 'fastlane/' hence the '../'
-    podfile_content.gsub!(%r{^\$matrixKitVersion\s*=\s*.*$}, "$matrixKitVersion = { #{kit_podspec} => #{sdk_spec} }")
-    File.write('../Podfile', podfile_content)
-    UI.command_output("Content of modified Podfile:\n" + podfile_content)
+    dsym_path = "#{ENV["BUILD_OUTPUT_DIRECTORY"]}/#{ENV["IPA_NAME"]}.app.dSYM.zip"
+  
+    sentry_debug_files_upload(
+      auth_token: ENV["SENTRY_AUTH_TOKEN"],
+      org_slug: 'element',
+      project_slug: 'element-ios',
+      url: 'https://sentry.tools.element.io/',
+      path: dsym_path,
+    )
   end
 
   # git_branch can return an empty screen with some CI tools (like GH actions) 
@@ -437,21 +487,21 @@ platform :ios do
   end
 end
 
-  # Update an arbitrary file by applying some RegExp replacements to its content
-  #
-  # @param [String] file The path to the file that needs replacing
-  # @param [Hash<RegExp, String>] replacements A list of replacements to apply
-  #
-  def update_file_content(file, replacements)
-    content = File.read(file)
-    replacements.each do |pattern, replacement|
-      content.gsub!(pattern, replacement)
-    end
-    File.write(file, content)
+# Update an arbitrary file by applying some RegExp replacements to its content
+#
+# @param [String] file The path to the file that needs replacing
+# @param [Hash<RegExp, String>] replacements A list of replacements to apply
+#
+def update_file_content(file, replacements)
+  content = File.read(file)
+  replacements.each do |pattern, replacement|
+    content.gsub!(pattern, replacement)
   end
+  File.write(file, content)
+end
 
-  # Generates a new build number based on timestamp
-  def generate_build_number()
-    require 'date'
-    return DateTime.now.strftime("%Y%m%d%H%M%S")
-  end
+# Generates a new build number based on timestamp
+def generate_build_number()
+  require 'date'
+  return DateTime.now.strftime("%Y%m%d%H%M%S")
+end

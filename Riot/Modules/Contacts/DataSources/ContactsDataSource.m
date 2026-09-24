@@ -1,17 +1,9 @@
 /*
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import <Contacts/Contacts.h>
@@ -21,7 +13,7 @@
 #import "LocalContactsSectionHeaderContainerView.h"
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #define CONTACTSDATASOURCE_LOCALCONTACTS_BITWISE 0x01
 #define CONTACTSDATASOURCE_USERDIRECTORY_BITWISE 0x02
@@ -88,6 +80,16 @@
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onContactManagerDidUpdate:) name:kMXKContactManagerDidUpdateMatrixContactsNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onContactManagerDidUpdate:) name:kMXKContactManagerDidUpdateLocalContactsNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onContactManagerDidUpdate:) name:kMXKContactManagerDidUpdateLocalContactMatrixIDsNotification object:nil];
+    }
+    return self;
+}
+
+- (instancetype)initWithMatrixSession:(MXSession *)mxSession
+{
+    self = [super initWithMatrixSession:mxSession];
+    if (self) {
+        // Only show local contacts when contact sync is enabled and the identity server terms of service have been accepted.
+        _showLocalContacts = MXKAppSettings.standardAppSettings.syncLocalContacts && self.mxSession.identityService.areAllTermsAgreed;
     }
     return self;
 }
@@ -473,8 +475,8 @@
             searchInputSection = count++;
         }
         
-        // Keep visible the header for the both contact sections, even if their are empty.
-        if (BuildSettings.allowLocalContactsAccess)
+        // Keep visible the header for the both contact sections, even if they're are empty.
+        if (BuildSettings.allowLocalContactsAccess && self.showLocalContacts && [CNContactStore authorizationStatusForEntityType:CNEntityTypeContacts] == CNAuthorizationStatusAuthorized)
         {
             filteredLocalContactsSection = count++;
         }
@@ -489,7 +491,7 @@
         }
         
         // Keep visible the local contact header, even if the section is empty.
-        if (BuildSettings.allowLocalContactsAccess)
+        if (BuildSettings.allowLocalContactsAccess && self.showLocalContacts && [CNContactStore authorizationStatusForEntityType:CNEntityTypeContacts] == CNAuthorizationStatusAuthorized)
         {
             filteredLocalContactsSection = count++;
         }
@@ -615,7 +617,7 @@
             if (indexPath.section == filteredMatrixContactsSection &&
                 (_userDirectoryState == ContactsDataSourceUserDirectoryStateLoading || _userDirectoryState == ContactsDataSourceUserDirectoryStateOfflineLoading))
             {
-                tableViewCell.textLabel.text = [MatrixKitL10n searchSearching];
+                tableViewCell.textLabel.text = [VectorL10n searchSearching];
             }
             else
             {
@@ -781,19 +783,24 @@
     return sectionTitle;
 }
 
-- (UIView *)viewForHeaderInSection:(NSInteger)section withFrame:(CGRect)frame
+- (UIView *)viewForHeaderInSection:(NSInteger)section withFrame:(CGRect)frame inTableView:(UITableView *)tableView
 {
     NSInteger sectionBitwise = 0;
     
-    SectionHeaderView *sectionHeader = [[SectionHeaderView alloc] initWithFrame:frame];
-    sectionHeader.backgroundColor = ThemeService.shared.theme.headerBackgroundColor;
+    SectionHeaderView *sectionHeader = [tableView dequeueReusableHeaderFooterViewWithIdentifier:SectionHeaderView.defaultReuseIdentifier];
+    if (sectionHeader == nil)
+    {
+        sectionHeader = [[SectionHeaderView alloc] initWithReuseIdentifier:SectionHeaderView.defaultReuseIdentifier];
+    }
+    sectionHeader.frame = frame;
+    sectionHeader.backgroundView = [UIView new];
+    sectionHeader.backgroundView.backgroundColor = ThemeService.shared.theme.headerBackgroundColor;
     sectionHeader.topViewHeight = CONTACTSDATASOURCE_DEFAULT_SECTION_HEADER_HEIGHT;
 
     frame.size.height = CONTACTSDATASOURCE_DEFAULT_SECTION_HEADER_HEIGHT - 10;
     UILabel *headerLabel = [[UILabel alloc] initWithFrame:frame];
     headerLabel.attributedText = [self attributedStringForHeaderTitleInSection:section];
     headerLabel.backgroundColor = [UIColor clearColor];
-    [sectionHeader addSubview:headerLabel];
     sectionHeader.headerLabel = headerLabel;
 
     if (_areSectionsShrinkable)
@@ -822,7 +829,6 @@
         shrinkButton.backgroundColor = [UIColor clearColor];
         [shrinkButton addTarget:self action:@selector(onButtonPressed:) forControlEvents:UIControlEventTouchUpInside];
         shrinkButton.tag = sectionBitwise;
-        [sectionHeader addSubview:shrinkButton];
         sectionHeader.topSpanningView = shrinkButton;
         sectionHeader.userInteractionEnabled = YES;
         
@@ -830,16 +836,15 @@
         UIImage *chevron;
         if (shrinkedSectionsBitMask & sectionBitwise)
         {
-            chevron = [UIImage imageNamed:@"disclosure_icon"];
+            chevron = AssetImages.disclosureIcon.image;
         }
         else
         {
-            chevron = [UIImage imageNamed:@"shrink_icon"];
+            chevron = AssetImages.shrinkIcon.image;
         }
         UIImageView *chevronView = [[UIImageView alloc] initWithImage:chevron];
         chevronView.tintColor = ThemeService.shared.theme.textSecondaryColor;
         chevronView.contentMode = UIViewContentModeCenter;
-        [sectionHeader addSubview:chevronView];
         sectionHeader.accessoryView = chevronView;
     }
     
@@ -879,24 +884,23 @@
         checkboxLabel.textColor = ThemeService.shared.theme.textPrimaryColor;
         
         // Set the right value of the tick box
-        localContactsCheckbox.image = hideNonMatrixEnabledContacts ? [UIImage imageNamed:@"selection_tick"] : [UIImage imageNamed:@"selection_untick"];
+        localContactsCheckbox.image = hideNonMatrixEnabledContacts ? AssetImages.selectionTick.image : AssetImages.selectionUntick.image;
         localContactsCheckbox.tintColor = ThemeService.shared.theme.tintColor;
         
         // Add the check box container
-        [sectionHeader addSubview:localContactsCheckboxContainer];
         sectionHeader.bottomView = localContactsCheckboxContainer;
     }
     
     return sectionHeader;
 }
 
-- (UIView *)viewForStickyHeaderInSection:(NSInteger)section withFrame:(CGRect)frame
+- (UIView *)viewForStickyHeaderInSection:(NSInteger)section withFrame:(CGRect)frame inTableView:(UITableView *)tableView
 {
     // Return the section header used when the section is shrinked
     NSInteger savedShrinkedSectionsBitMask = shrinkedSectionsBitMask;
     shrinkedSectionsBitMask = CONTACTSDATASOURCE_LOCALCONTACTS_BITWISE | CONTACTSDATASOURCE_USERDIRECTORY_BITWISE;
     
-    UIView *stickyHeader = [self viewForHeaderInSection:section withFrame:frame];
+    UIView *stickyHeader = [self viewForHeaderInSection:section withFrame:frame inTableView:tableView];
     
     shrinkedSectionsBitMask = savedShrinkedSectionsBitMask;
     

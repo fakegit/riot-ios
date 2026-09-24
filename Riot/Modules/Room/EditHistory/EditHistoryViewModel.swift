@@ -105,7 +105,7 @@ final class EditHistoryViewModel: EditHistoryViewModelType {
         
         self.update(viewState: .loading)
         
-        self.operation = self.aggregations.replaceEvents(forEvent: self.event.eventId, isEncrypted: self.event.isEncrypted, inRoom: self.roomId, from: self.nextBatch, limit: Pagination.count, success: { [weak self] (response) in
+        self.operation = self.aggregations.replaceEvents(forEvent: self.event.eventId, isEncrypted: self.event.isEncrypted, inRoom: self.roomId, from: self.nextBatch, limit: Int(Pagination.count), success: { [weak self] (response) in
             guard let sself = self else {
                 return
             }
@@ -222,7 +222,10 @@ final class EditHistoryViewModel: EditHistoryViewModelType {
     private func process(event: MXEvent, ts: UInt64) -> EditHistoryMessage? {
 
         let formatterError = UnsafeMutablePointer<MXKEventFormatterError>.allocate(capacity: 1)
-        guard let message = self.formatter.attributedString(from: event, with: nil, error: formatterError) else {
+        guard let message = self.formatter.attributedString(from: event,
+                                                            with: nil,
+                                                            andLatestRoomState: nil,
+                                                            error: formatterError) else {
             MXLog.debug("[EditHistoryViewModel] processEditEvent: cannot format(error: \(formatterError)) event: \(event.eventId ?? "")")
             return nil
         }

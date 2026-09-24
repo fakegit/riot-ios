@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -55,7 +46,7 @@ public protocol Colors {
     /// Separating line
     var separator: ColorType { get }
     
-    //  Cards, tiles
+    /// Cards, tiles
     var tile: ColorType { get }
     
     /// Top navigation background on iOS
@@ -64,8 +55,14 @@ public protocol Colors {
     /// Background UI color
     var background: ColorType { get }
     
+    /// Global color: The EMS brand's purple colour.
+    var ems: ColorType { get }
+    
+    /// - Links
+    /// - Hyperlinks
+    var links: ColorType { get }
+    
     /// - Names in chat timeline
     /// - Avatars default states that include first name letter
     var namesAndAvatars: [ColorType] { get }
-    
 }

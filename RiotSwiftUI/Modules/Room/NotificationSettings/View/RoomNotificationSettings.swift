@@ -1,23 +1,14 @@
 //
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import SwiftUI
 
-@available(iOS 14.0.0, *)
 struct RoomNotificationSettings: View {
+    @Environment(\.theme) var theme: ThemeSwiftUI
     
     @ObservedObject var viewModel: RoomNotificationSettingsSwiftUIViewModel
     
@@ -41,7 +32,7 @@ struct RoomNotificationSettings: View {
     
     var body: some View {
         VectorForm {
-            if  let avatarData = viewModel.viewState.avatarData as? AvatarInputProtocol {
+            if let avatarData = viewModel.viewState.avatarData as? AvatarInputProtocol {
                 RoomNotificationSettingsHeader(
                     avatarData: avatarData,
                     displayName: viewModel.viewState.displayName
@@ -67,12 +58,12 @@ struct RoomNotificationSettings: View {
         .onAppear {
             viewModel.process(viewAction: .load)
         }
+        .accentColor(theme.colors.accent)
+        .track(screen: .roomNotifications)
     }
 }
 
-@available(iOS 14.0, *)
 struct RoomNotificationSettings_Previews: PreviewProvider {
-    
     static let mockViewModel = RoomNotificationSettingsSwiftUIViewModel(
         roomNotificationService: MockRoomNotificationSettingsService.example,
         avatarData: MockAvatarInput.example,
@@ -85,13 +76,13 @@ struct RoomNotificationSettings_Previews: PreviewProvider {
             NavigationView {
                 RoomNotificationSettings(viewModel: mockViewModel, presentedModally: true)
                     .navigationBarTitleDisplayMode(.inline)
-                    .addDependency(MockAvatarService.example)
+                    .environmentObject(AvatarViewModel.withMockedServices())
             }
             NavigationView {
                 RoomNotificationSettings(viewModel: mockViewModel, presentedModally: true)
                     .navigationBarTitleDisplayMode(.inline)
                     .theme(ThemeIdentifier.dark)
-                    .addDependency(MockAvatarService.example)
+                    .environmentObject(AvatarViewModel.withMockedServices())
             }
         }
     }

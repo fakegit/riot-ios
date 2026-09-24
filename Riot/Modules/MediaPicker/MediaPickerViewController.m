@@ -1,23 +1,15 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "MediaPickerViewController.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import <Photos/Photos.h>
 
@@ -28,8 +20,6 @@
 #import "MediaAlbumContentViewController.h"
 
 #import "MediaAlbumTableCell.h"
-
-#import <MatrixKit/MatrixKit.h>
 
 @interface MediaPickerViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, MediaAlbumContentViewControllerDelegate>
 
@@ -136,6 +126,8 @@
     }];
     
     self.navigationItem.rightBarButtonItem = closeBarButtonItem;
+    // Hide back button title
+    [self vc_removeBackTitle];
     
     // Register collection view cell class
     [self.recentCapturesCollectionView registerNib:MXKMediaCollectionViewCell.nib forCellWithReuseIdentifier:[MXKMediaCollectionViewCell defaultReuseIdentifier]];
@@ -147,16 +139,13 @@
     // Force UI refresh according to selected  media types - Set default media type if none.
     self.mediaTypes = _mediaTypes ? _mediaTypes : @[(NSString *)kUTTypeImage];
     
-    // Check photo library access
-    [self checkPhotoLibraryAuthorizationStatus];
     
     // Observe UIApplicationWillEnterForegroundNotification to refresh captures collection when app leaves the background state.
     UIApplicationWillEnterForegroundNotificationObserver = [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notif) {
         
         MXStrongifyAndReturnIfNil(self);
 
-        [self reloadRecentCapturesCollection];
-        [self reloadUserLibraryAlbums];
+        [self checkPhotoLibraryAuthorizationStatusAndReload];
 
     }];
 
@@ -214,17 +203,13 @@
     [super viewWillAppear:animated];
     
     [self userInterfaceThemeDidChange];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"MediaPicker"];
     
     if (!userAlbumsQueue)
     {
         userAlbumsQueue = dispatch_queue_create("media.picker.user.albums", DISPATCH_QUEUE_SERIAL);
     }
     
-    [self reloadRecentCapturesCollection];
-    [self reloadUserLibraryAlbums];
+    [self checkPhotoLibraryAuthorizationStatusAndReload];
 }
 
 - (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id <UIViewControllerTransitionCoordinator>)coordinator
@@ -236,29 +221,28 @@
         [self updateRecentCapturesCollectionViewHeightIfNeeded];
     });
 }
-
-- (void)checkPhotoLibraryAuthorizationStatus
+    
+- (void)checkPhotoLibraryAuthorizationStatusAndReload
 {
     [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
         
         switch (status) {
-            case PHAuthorizationStatusAuthorized:
+            case PHAuthorizationStatusAuthorized: {
                 // Load recent captures if this is not already done
-                if (!self->recentCaptures.count)
-                {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        
-                        [self reloadRecentCapturesCollection];
-                        [self reloadUserLibraryAlbums];
-                        
-                    });
-                }
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    
+                    [self reloadRecentCapturesCollection];
+                    [self reloadUserLibraryAlbums];
+                    
+                });
                 break;
-            default:
+            }
+            default:{
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [self presentPermissionDeniedAlert];
                 });
                 break;
+            }
         }
     }];
 }
@@ -273,7 +257,7 @@
                                                                    message:message
                                                             preferredStyle:UIAlertControllerStyleAlert];
     
-    [alert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
+    [alert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok]
                                               style:UIAlertActionStyleCancel
                                             handler:^(UIAlertAction * action) {
                                                 [self.delegate mediaPickerControllerDidCancel:self];
@@ -281,7 +265,7 @@
     
     NSURL *settingsURL = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
     
-    [alert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n settings]
+    [alert addAction:[UIAlertAction actionWithTitle:[VectorL10n settings]
                                               style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction * action) {
                                                 [UIApplication.sharedApplication openURL:settingsURL options:@{} completionHandler:^(BOOL success) {
@@ -307,8 +291,7 @@
     {
         _mediaTypes = mediaTypes;
         
-        [self reloadRecentCapturesCollection];
-        [self reloadUserLibraryAlbums];
+        [self checkPhotoLibraryAuthorizationStatusAndReload];
     }
 }
 
@@ -408,8 +391,8 @@
         
         MXStrongifyAndReturnIfNil(self);
         
-        // List user albums which are not empty
-        PHFetchResult *albums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAlbumRegular options:nil];
+        // From iOS 18, select any subtype albums rather than regular ones to have both normal and smart albums appear, or they won't work at all
+        PHFetchResult *albums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAny options:nil];
         
         NSMutableArray *updatedUserAlbums = [NSMutableArray array];
         __block PHAssetCollection *cameraRollAlbum, *videoAlbum;
@@ -656,7 +639,7 @@
     validationView.stretchable = YES;
     
     // the user validates the image
-    [validationView setRightButtonTitle:[MatrixKitL10n ok] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
+    [validationView setRightButtonTitle:[VectorL10n ok] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
         __strong __typeof(weakSelf)strongSelf = weakSelf;
         
         // Dismiss the image view
@@ -666,7 +649,7 @@
     }];
     
     // the user wants to use an other image
-    [validationView setLeftButtonTitle:[MatrixKitL10n cancel] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
+    [validationView setLeftButtonTitle:[VectorL10n cancel] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
         __strong __typeof(weakSelf)strongSelf = weakSelf;
         
         // dismiss the image view
@@ -695,7 +678,7 @@
     validationView.stretchable = NO;
     
     // the user validates the image
-    [validationView setRightButtonTitle:[MatrixKitL10n ok] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
+    [validationView setRightButtonTitle:[VectorL10n ok] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
         __strong __typeof(weakSelf)strongSelf = weakSelf;
         
         // Dismiss the image view
@@ -705,7 +688,7 @@
     }];
     
     // the user wants to use an other image
-    [validationView setLeftButtonTitle:[MatrixKitL10n cancel] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
+    [validationView setLeftButtonTitle:[VectorL10n cancel] handler:^(MXKImageView* imageView, NSString* buttonTitle) {
         __strong __typeof(weakSelf)strongSelf = weakSelf;
         
         // dismiss the image view
@@ -740,8 +723,8 @@
     videoPlayerControl = [UIButton buttonWithType:UIButtonTypeCustom];
     [videoPlayerControl addTarget:self action:@selector(controlVideoPlayer) forControlEvents:UIControlEventTouchUpInside];
     videoPlayerControl.frame = CGRectMake(0, 0, 44, 44);
-    [videoPlayerControl setImage:[UIImage imageNamed:@"camera_play"] forState:UIControlStateNormal];
-    [videoPlayerControl setImage:[UIImage imageNamed:@"camera_play"] forState:UIControlStateHighlighted];
+    [videoPlayerControl setImage:AssetImages.cameraPlay.image forState:UIControlStateNormal];
+    [videoPlayerControl setImage:AssetImages.cameraPlay.image forState:UIControlStateHighlighted];
     [validationView addSubview:videoPlayerControl];
     videoPlayerControl.center = validationView.imageView.center;
 
@@ -807,8 +790,8 @@
         [videoPlayer.player seekToTime:kCMTimeZero];
         [videoPlayer.view removeFromSuperview];
         
-        [videoPlayerControl setImage:[UIImage imageNamed:@"camera_play"] forState:UIControlStateNormal];
-        [videoPlayerControl setImage:[UIImage imageNamed:@"camera_play"] forState:UIControlStateHighlighted];
+        [videoPlayerControl setImage:AssetImages.cameraPlay.image forState:UIControlStateNormal];
+        [videoPlayerControl setImage:AssetImages.cameraPlay.image forState:UIControlStateHighlighted];
     }
     else
     {
@@ -826,8 +809,8 @@
         
         [videoPlayer.player play];
         
-        [videoPlayerControl setImage:[UIImage imageNamed:@"camera_stop"] forState:UIControlStateNormal];
-        [videoPlayerControl setImage:[UIImage imageNamed:@"camera_stop"] forState:UIControlStateHighlighted];
+        [videoPlayerControl setImage:AssetImages.cameraStop.image forState:UIControlStateNormal];
+        [videoPlayerControl setImage:AssetImages.cameraStop.image forState:UIControlStateHighlighted];
         [validationView bringSubviewToFront:videoPlayerControl];
     }
 }
@@ -871,7 +854,7 @@
             
         }];
         
-        cell.bottomLeftIcon.image = [UIImage imageNamed:@"video_icon"];
+        cell.bottomLeftIcon.image = AssetImages.videoIcon.image;
         cell.bottomLeftIcon.hidden = (asset.mediaType == PHAssetMediaTypeImage);
         
         // Disable user interaction in mxkImageView, in order to let collection handle user selection
@@ -962,8 +945,9 @@
         PHFetchResult *assets = [PHAsset fetchAssetsInAssetCollection:collection options:options];
         cell.albumCountLabel.text = [NSString stringWithFormat:@"%tu", assets.count];
         
-        // Report first asset thumbnail (except for 'Recently Deleted' album)
-        if (assets.count && collection.assetCollectionSubtype != 1000000201)
+        // Report first asset thumbnail (except for 'Recently Deleted' and 'Hidden' albums)
+        BOOL isSensitiveCollection = collection.assetCollectionSubtype == 1000000201 || collection.assetCollectionSubtype == PHAssetCollectionSubtypeSmartAlbumAllHidden;
+        if (assets.count && !isSensitiveCollection)
         {
             PHAsset *asset = assets[0];
             
@@ -979,7 +963,7 @@
                 
                 if (collection.assetCollectionSubtype == PHAssetCollectionSubtypeSmartAlbumVideos)
                 {
-                    cell.bottomLeftIcon.image = [UIImage imageNamed:@"video_icon"];
+                    cell.bottomLeftIcon.image = AssetImages.videoIcon.image;
                     cell.bottomLeftIcon.hidden = NO;
                 }
                 else
@@ -1039,9 +1023,6 @@
             albumContentViewController.allowsMultipleSelection = self.allowsMultipleSelection;
         }
 
-        // Hide back button title
-        self.navigationItem.backBarButtonItem =[[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-        
         [self.navigationController pushViewController:albumContentViewController animated:YES];
     }
 }

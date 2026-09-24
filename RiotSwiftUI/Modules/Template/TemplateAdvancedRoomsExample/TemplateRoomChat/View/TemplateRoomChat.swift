@@ -1,39 +1,22 @@
 //
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import SwiftUI
 import Combine
+import SwiftUI
 
-@available(iOS 14.0, *)
 struct TemplateRoomChat: View {
-    
-    // MARK: - Properties
-    
-    // MARK: Private
-    
     @Environment(\.theme) private var theme: ThemeSwiftUI
-    
-    // MARK: Public
     
     @ObservedObject var viewModel: TemplateRoomChatViewModel.Context
     var presentedModally = false
     
     var body: some View {
         VStack {
-            VStack{
+            VStack {
                 roomContent
             }.frame(maxHeight: .infinity)
             
@@ -52,7 +35,6 @@ struct TemplateRoomChat: View {
             .animation(.easeOut(duration: 0.25))
             .transition(.move(edge: .trailing))
             .padding()
-            
         }
         .background(theme.colors.background)
         .navigationTitle(viewModel.viewState.roomName ?? "Chat")
@@ -84,14 +66,14 @@ struct TemplateRoomChat: View {
     
     private var bubbleList: some View {
         ScrollViewReader { reader in
-            ScrollView{
+            ScrollView {
                 LazyVStack {
                     ForEach(viewModel.viewState.bubbles) { bubble in
                         TemplateRoomChatBubbleView(bubble: bubble)
                             .id(bubble.id)
                     }
                 }
-                .onAppear{
+                .onAppear {
                     guard let lastBubbleId = viewModel.viewState.bubbles.last?.id
                     else { return }
                     reader.scrollTo(lastBubbleId, anchor: .bottom)
@@ -117,7 +99,7 @@ struct TemplateRoomChat: View {
     }
     
     private var itemCount: Int {
-        return viewModel.viewState
+        viewModel.viewState
             .bubbles
             .map(\.items)
             .map(\.count)
@@ -127,7 +109,6 @@ struct TemplateRoomChat: View {
 
 // MARK: - Previews
 
-@available(iOS 14.0, *)
 struct TemplateRoomChat_Previews: PreviewProvider {
     static let stateRenderer = MockTemplateRoomChatScreenState.stateRenderer
     static var previews: some View {

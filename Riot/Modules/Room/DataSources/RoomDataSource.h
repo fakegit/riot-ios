@@ -1,21 +1,13 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
-#import <MatrixKit/MatrixKit.h>
+#import "MatrixKit.h"
 
 #import "WidgetManager.h"
 
@@ -33,7 +25,7 @@
 /**
  The event id of the current selected event if any. Default is nil.
  */
-@property(nonatomic) NSString *selectedEventId;
+@property(nonatomic, nullable) NSString *selectedEventId;
 
 /**
  Tell whether the initial event of the timeline (if any) must be marked. Default is NO.
@@ -46,6 +38,11 @@
 @property(nonatomic) BOOL showBubbleDateTimeOnSelection;
 
 /**
+ Flag to decide displaying typing row in the data source. Default is YES.
+ */
+@property (nonatomic, assign) BOOL showTypingRow;
+
+/**
  Current room members trust level for an encrypted room.
  */
 @property(nonatomic, readonly) RoomEncryptionTrustLevel encryptionTrustLevel;
@@ -56,11 +53,20 @@
 @property(nonatomic, nullable) NSArray<TypingUserInfo *> *currentTypingUsers;
 
 /**
+ Identifier of the event to be highlighted. Default is nil.
+ Data source owner should reload the view itself to reflect changes, and nullify the parameter afterwards when it doesn't highlight the event anymore.
+ */
+@property (nonatomic, nullable) NSString *highlightedEventId;
+
+/// Is current user sharing is location in the room
+@property(nonatomic, readonly) BOOL isCurrentUserSharingActiveLocation;
+
+/**
  Check if there is an active jitsi widget in the room and return it.
 
  @return a widget representating the active jitsi conference in the room. Else, nil.
  */
-- (Widget *)jitsiWidget;
+- (Widget * _Nullable)jitsiWidget;
 
 /**
  Send a video to the room.
@@ -74,9 +80,9 @@
  the event id of the event generated on the homeserver
  @param failure A block object called when the operation fails.
  */
-- (void)sendVideo:(NSURL*)videoLocalURL
-          success:(void (^)(NSString *eventId))success
-          failure:(void (^)(NSError *error))failure;
+- (void)sendVideo:(NSURL * _Nonnull)videoLocalURL
+          success:(nullable void (^)(NSString * _Nonnull))success
+          failure:(nullable void (^)(NSError * _Nullable))failure;
 
 /**
  Accept incoming key verification request.
@@ -85,9 +91,9 @@
  @param success A block object called when the operation succeeds.
  @param failure A block object called when the operation fails.
  */
-- (void)acceptVerificationRequestForEventId:(NSString*)eventId
-                                    success:(void(^)(void))success
-                                    failure:(void(^)(NSError*))failure;
+- (void)acceptVerificationRequestForEventId:(NSString * _Nonnull)eventId
+                                    success:(nullable void(^)(void))success
+                                    failure:(nullable void(^)(NSError * _Nullable))failure;
 
 /**
  Decline incoming key verification request.
@@ -96,9 +102,9 @@
  @param success A block object called when the operation succeeds.
  @param failure A block object called when the operation fails.
  */
-- (void)declineVerificationRequestForEventId:(NSString*)eventId
-                                     success:(void(^)(void))success
-                                     failure:(void(^)(NSError*))failure;
+- (void)declineVerificationRequestForEventId:(NSString * _Nonnull)eventId
+                                     success:(nullable void(^)(void))success
+                                     failure:(nullable void(^)(NSError * _Nullable))failure;
 
 - (void)resetTypingNotification;
 
@@ -106,9 +112,22 @@
 
 @protocol RoomDataSourceDelegate <MXKDataSourceDelegate>
 
-- (void)roomDataSource:(RoomDataSource*)roomDataSource didUpdateEncryptionTrustLevel:(RoomEncryptionTrustLevel)roomEncryptionTrustLevel;
+/**
+ Called when the room's encryption trust level did update.
+ 
+ @param roomDataSource room data source instance
+ */
+- (void)roomDataSourceDidUpdateEncryptionTrustLevel:(RoomDataSource * _Nonnull)roomDataSource;
 
-- (void)roomDataSource:(RoomDataSource*)roomDataSource didCancel:(MXEvent *)event;
+/**
+ Called when a thread summary view is tapped.
+ 
+ @param roomDataSource room data source instance
+ */
+- (void)roomDataSource:(RoomDataSource * _Nonnull)roomDataSource
+          didTapThread:(id<MXThreadProtocol> _Nonnull)thread;
 
+/// Called when current live location sharing status is changing (start or stop location sharing in the room)
+- (void)roomDataSourceDidUpdateCurrentUserSharingLocationStatus:(RoomDataSource * _Nonnull)roomDataSource;
 
 @end

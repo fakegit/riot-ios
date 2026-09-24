@@ -1,25 +1,16 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "PreviewRoomTitleView.h"
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import "MXRoomSummary+Riot.h"
 
@@ -51,12 +42,22 @@
     [self.rightButton setTitle:[VectorL10n join] forState:UIControlStateNormal];
     [self.rightButton setTitle:[VectorL10n join] forState:UIControlStateHighlighted];
     
+    [self.reportButton setTitle:[VectorL10n roomActionReport] forState:UIControlStateNormal];
+    [self.reportButton setTitle:[VectorL10n roomActionReport] forState:UIControlStateHighlighted];
+    
     tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(reportTapGesture:)];
     [tap setNumberOfTouchesRequired:1];
     [tap setNumberOfTapsRequired:1];
     [tap setDelegate:self];
     [self.rightButton addGestureRecognizer:tap];
     self.rightButton.userInteractionEnabled = YES;
+    
+    tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(reportTapGesture:)];
+    [tap setNumberOfTouchesRequired:1];
+    [tap setNumberOfTapsRequired:1];
+    [tap setDelegate:self];
+    [self.reportButton addGestureRecognizer:tap];
+    self.reportButton.userInteractionEnabled = YES;
 }
 
 -(void)customizeViewRendering
@@ -86,6 +87,8 @@
     [self.rightButton.layer setCornerRadius:5];
     self.rightButton.clipsToBounds = YES;
     self.rightButton.backgroundColor = ThemeService.shared.theme.tintColor;
+    
+    [self.reportButton setTitleColor:ThemeService.shared.theme.warningColor forState:UIControlStateNormal];
 }
 
 - (void)refreshDisplay
@@ -102,7 +105,7 @@
                      andImageOrientation:UIImageOrientationUp
                            toFitViewSize:self.roomAvatar.frame.size
                               withMethod:MXThumbnailingMethodCrop
-                            previewImage:[MXKTools paintImage:[UIImage imageNamed:@"placeholder"]
+                            previewImage:[MXKTools paintImage:AssetImages.placeholder.image
                                                     withColor:ThemeService.shared.theme.tintColor]
                             mediaManager:self.mxRoom.mxSession.mediaManager];
         }
@@ -121,7 +124,8 @@
         // Joined members count
         if (self.roomPreviewData.numJoinedMembers > 1)
         {
-            self.roomMembers.text = [VectorL10n roomTitleMembers:@(self.roomPreviewData.numJoinedMembers)];
+            NSString *numJoinedMembers = [@(self.roomPreviewData.numJoinedMembers) description];
+            self.roomMembers.text = [VectorL10n roomTitleMembers:numJoinedMembers];
         }
         else if (self.roomPreviewData.numJoinedMembers == 1)
         {

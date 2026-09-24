@@ -1,25 +1,14 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import Foundation
 import Combine
+import Foundation
 
-@available(iOS 14.0, *)
 class MXNotificationSettingsService: NotificationSettingsServiceType {
-    
     private let session: MXSession
     private var cancellables = Set<AnyCancellable>()
     
@@ -27,11 +16,11 @@ class MXNotificationSettingsService: NotificationSettingsServiceType {
     @Published private var rules = [MXPushRule]()
     
     var rulesPublisher: AnyPublisher<[NotificationPushRuleType], Never> {
-        $rules.map({ $0.map({ $0 as NotificationPushRuleType }) }).eraseToAnyPublisher()
+        $rules.map { $0.map { $0 as NotificationPushRuleType } }.eraseToAnyPublisher()
     }
     
     var contentRulesPublisher: AnyPublisher<[NotificationPushRuleType], Never> {
-        $contentRules.map({ $0.map({ $0 as NotificationPushRuleType }) }).eraseToAnyPublisher()
+        $contentRules.map { $0.map { $0 as NotificationPushRuleType } }.eraseToAnyPublisher()
     }
     
     init(session: MXSession) {
@@ -40,13 +29,15 @@ class MXNotificationSettingsService: NotificationSettingsServiceType {
         let rulesUpdated = NotificationCenter.default.publisher(for: NSNotification.Name(rawValue: kMXNotificationCenterDidUpdateRules))
         
         // Set initial value of the content rules
-        if let contentRules = session.notificationCenter.rules.global.content as? [MXPushRule] {
+        if let contentRules = session.notificationCenter.rules?.global.content as? [MXPushRule] {
             self.contentRules = contentRules
         }
         
         // Observe future updates to content rules
         rulesUpdated
-            .compactMap({ _ in self.session.notificationCenter.rules.global.content as? [MXPushRule] })
+            .compactMap { [weak self] _ in
+                self?.session.notificationCenter.rules.global.content as? [MXPushRule]
+            }
             .assign(to: &$contentRules)
         
         // Set initial value of rules
@@ -55,14 +46,15 @@ class MXNotificationSettingsService: NotificationSettingsServiceType {
         }
         // Observe future updates to rules
         rulesUpdated
-            .compactMap({ _ in self.session.notificationCenter.flatRules as? [MXPushRule] })
+            .compactMap { [weak self] _ in
+                self?.session.notificationCenter.flatRules as? [MXPushRule]
+            }
             .assign(to: &$rules)
     }
     
     func add(keyword: String, enabled: Bool) {
         let index = NotificationIndex.index(when: enabled)
-        guard let actions = NotificationPushRuleId.keywords.standardActions(for: index)?.actions
-        else {
+        guard let actions = NotificationPushRuleId.keywords.standardActions(for: index).actions else {
             return
         }
         session.notificationCenter.addContentRuleWithRuleId(matchingPattern: keyword, notify: actions.notify, sound: actions.sound, highlight: actions.highlight)
@@ -73,16 +65,52 @@ class MXNotificationSettingsService: NotificationSettingsServiceType {
         session.notificationCenter.removeRule(rule)
     }
     
-    func updatePushRuleActions(for ruleId: String, enabled: Bool, actions: NotificationActions?) {
-        guard let rule = session.notificationCenter.rule(byId: ruleId) else { return }
-        session.notificationCenter.enableRule(rule, isEnabled: enabled)
+    func updatePushRuleActions(for ruleId: String,
+                               enabled: Bool,
+                               actions: NotificationActions?) async throws {
         
-        if let actions = actions {
-            session.notificationCenter.updatePushRuleActions(ruleId,
-                                                             kind: rule.kind,
-                                                             notify: actions.notify,
-                                                             soundName: actions.sound,
-                                                             highlight: actions.highlight)
+        guard let rule = session.notificationCenter.rule(byId: ruleId) else {
+            return
+        }
+        
+        guard let actions = actions else {
+            try await session.notificationCenter.enableRule(pushRule: rule, isEnabled: enabled)
+            return
+        }
+        
+        // Updating the actions before enabling the rule allows the homeserver to triggers just one sync update
+        try await session.notificationCenter.updatePushRuleActions(ruleId,
+                                                                   kind: rule.kind,
+                                                                   notify: actions.notify,
+                                                                   soundName: actions.sound,
+                                                                   highlight: actions.highlight)
+        
+        try await session.notificationCenter.enableRule(pushRule: rule, isEnabled: enabled)
+    }
+}
+
+private extension MXNotificationCenter {
+    func enableRule(pushRule: MXPushRule, isEnabled: Bool) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            enableRule(pushRule, isEnabled: isEnabled) { error in
+                if let error = error {
+                    continuation.resume(with: .failure(error))
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+    
+    func updatePushRuleActions(ruleId: String, kind: __MXPushRuleKind, notify: Bool, soundName: String, highlight: Bool) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            updatePushRuleActions(ruleId, kind: kind, notify: notify, soundName: soundName, highlight: highlight) { error in
+                if let error = error {
+                    continuation.resume(with: .failure(error))
+                } else {
+                    continuation.resume()
+                }
+            }
         }
     }
 }

@@ -1,25 +1,16 @@
 /*
- Copyright 2017 Vector Creations Ltd
- Copyright 2019 New Vector Ltd
+Copyright 2019-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "IntegrationManagerViewController.h"
 
 #import "WidgetManager.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 NSString *const kIntegrationManagerMainScreen = nil;
 NSString *const kIntegrationManagerAddIntegrationScreen = @"add_integ";
@@ -498,7 +489,7 @@ NSString *const kIntegrationManagerAddIntegrationScreen = @"add_integ";
         MXJSONModelSetBoolean(isState, requestData[@"is_state"]);
 
         MXRoomPowerLevels *powerLevels = roomState.powerLevels;
-        NSInteger userPowerLevel = [powerLevels powerLevelOfUserWithUserID:self->mxSession.myUser.userId];
+        NSInteger userPowerLevel = [roomState powerLevelOfUserWithUserID:self->mxSession.myUser.userId];
 
         BOOL canSend = NO;
 
@@ -726,7 +717,7 @@ NSString *const kIntegrationManagerAddIntegrationScreen = @"add_integ";
                                                                    message:message
                                                             preferredStyle:UIAlertControllerStyleAlert];
 
-    [alert addAction:[UIAlertAction actionWithTitle:[MatrixKitL10n ok]
+    [alert addAction:[UIAlertAction actionWithTitle:[VectorL10n ok]
                                               style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction * action) {
                                                 [self withdrawViewControllerAnimated:YES completion:nil];
@@ -745,7 +736,6 @@ NSString *const kIntegrationManagerAddIntegrationScreen = @"add_integ";
 
     ServiceTermsModalCoordinatorBridgePresenter *serviceTermsModalCoordinatorBridgePresenter = [[ServiceTermsModalCoordinatorBridgePresenter alloc] initWithSession:mxSession baseUrl:config.baseUrl
                                                                                                                                                         serviceType:MXServiceTypeIntegrationManager
-                                                                                                                                                       outOfContext:NO
                                                                                                                                                         accessToken:config.scalarToken];
 
     serviceTermsModalCoordinatorBridgePresenter.delegate = self;
@@ -762,7 +752,7 @@ NSString *const kIntegrationManagerAddIntegrationScreen = @"add_integ";
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 
-- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidCancel:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter
+- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidDecline:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter session:(MXSession * _Nonnull)session
 {
     [coordinatorBridgePresenter dismissWithAnimated:YES completion:^{
         [self withdrawViewControllerAnimated:YES completion:nil];
@@ -770,11 +760,8 @@ NSString *const kIntegrationManagerAddIntegrationScreen = @"add_integ";
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 
-- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidDecline:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter session:(MXSession * _Nonnull)session
+- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidClose:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter
 {
-    [coordinatorBridgePresenter dismissWithAnimated:YES completion:^{
-        [self withdrawViewControllerAnimated:YES completion:nil];
-    }];
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 

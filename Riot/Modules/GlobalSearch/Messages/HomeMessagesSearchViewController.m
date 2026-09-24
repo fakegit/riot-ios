@@ -1,23 +1,15 @@
 /*
- Copyright 2016 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2016 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "HomeMessagesSearchViewController.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import "HomeViewController.h"
 
@@ -115,12 +107,11 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"MessagesGlobalSearch"];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshSearchResult:) name:kMXSessionDidLeaveRoomNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshSearchResult:) name:kMXSessionNewRoomNotification object:nil];
+    
+    [self.screenTracker trackScreen];
 }
 
 - (void)viewWillDisappear:(BOOL)animated
@@ -144,6 +135,31 @@
             [self.dataSource searchMessages:self.dataSource.searchText force:YES];
         }
     }
+}
+
+- (void)showRoomWithId:(NSString*)roomId
+              andEvent:(MXEvent*)event
+       inMatrixSession:(MXSession*)session
+{
+    ThreadParameters *threadParameters = nil;
+    if (RiotSettings.shared.enableThreads)
+    {
+        if (event.threadId)
+        {
+            threadParameters = [[ThreadParameters alloc] initWithThreadId:event.threadId
+                                                          stackRoomScreen:NO];
+        }
+    }
+
+    ScreenPresentationParameters *screenParameters = [[ScreenPresentationParameters alloc] initWithRestoreInitialDisplay:NO stackAboveVisibleViews:NO];
+
+    RoomNavigationParameters *parameters = [[RoomNavigationParameters alloc] initWithRoomId:roomId
+                                                                                    eventId:event.eventId
+                                                                                  mxSession:self.mainSession
+                                                                           threadParameters:threadParameters
+                                                                     presentationParameters:screenParameters];
+    Analytics.shared.viewRoomTrigger = AnalyticsViewRoomTriggerMessageSearch;
+    [[LegacyAppDelegate theDelegate] showRoomWithParameters:parameters];
 }
 
 #pragma mark - MXKDataSourceDelegate
@@ -239,9 +255,9 @@
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
 
     // Make the master tabBar view controller open the RoomViewController
-    [[AppDelegate theDelegate].masterTabBarController selectRoomWithId:cellData.roomId
-                                                            andEventId:_selectedEvent.eventId
-                                                       inMatrixSession:cellData.mxSession];
+    [self showRoomWithId:cellData.roomId
+                andEvent:_selectedEvent
+         inMatrixSession:cellData.mxSession];
     
     // Reset the selected event. HomeViewController got it when here
     _selectedEvent = nil;

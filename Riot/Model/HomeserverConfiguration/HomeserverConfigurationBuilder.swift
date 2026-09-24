@@ -1,17 +1,8 @@
 // 
-// Copyright 2020 New Vector Ltd
+// Copyright 2020-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -23,52 +14,99 @@ final class HomeserverConfigurationBuilder: NSObject {
     // MARK: - Properties
     
     private let vectorWellKnownParser = VectorWellKnownParser()
+    private let currentDateProvider: () -> Date
+    
+    // MARK: - Setup
+    
+    override convenience init() {
+        self.init(currentDateProvider: Date.init)
+    }
+    
+    /// - Parameter currentDateProvider: Provides the current date, used for time based configuration. Injectable for tests.
+    init(currentDateProvider: @escaping () -> Date) {
+        self.currentDateProvider = currentDateProvider
+        
+        super.init()
+    }
     
     // MARK: - Public
     
     /// Create an `HomeserverConfiguration` from an HS Well-Known when possible otherwise it takes hardcoded values from BuildSettings by default.
     func build(from wellKnown: MXWellKnown?) -> HomeserverConfiguration {
-                
-        let isE2EEByDefaultEnabled: Bool
-        let jitsiPreferredDomain: String
-        
         var vectorWellKnownEncryptionConfiguration: VectorWellKnownEncryptionConfiguration?
         var vectorWellKnownJitsiConfiguration: VectorWellKnownJitsiConfiguration?
+        var vectorWellKnownMigrationBannerConfiguration: VectorWellKnownMigrationBannerConfiguration?
         
         if let wellKnown = wellKnown, let vectorWellKnown = self.vectorWellKnownParser.parse(jsonDictionary: wellKnown.jsonDictionary()) {
             vectorWellKnownEncryptionConfiguration = self.getEncryptionConfiguration(from: vectorWellKnown)
             vectorWellKnownJitsiConfiguration = self.getJitsiConfiguration(from: vectorWellKnown)
+            vectorWellKnownMigrationBannerConfiguration = vectorWellKnown.migrationBanner
+        }
+
+        // Encryption configuration
+        // Enable E2EE by default when there is no value
+        let isE2EEByDefaultEnabled = vectorWellKnownEncryptionConfiguration?.isE2EEByDefaultEnabled ?? true
+        // Disable mandatory secure backup when there is no value
+        let isSecureBackupRequired = vectorWellKnownEncryptionConfiguration?.isSecureBackupRequired ?? false
+        // Default to `MXKKeyPreSharingWhenTyping` when there is no value
+        let outboundKeysPreSharingMode = vectorWellKnownEncryptionConfiguration?.outboundKeysPreSharingMode ?? .whenTyping
+        // Defaults to all secure backup methods available when there is no value
+        let secureBackupSetupMethods: [VectorWellKnownBackupSetupMethod]
+        if let backupSetupMethods = vectorWellKnownEncryptionConfiguration?.secureBackupSetupMethods {
+            secureBackupSetupMethods = backupSetupMethods.isEmpty ? VectorWellKnownBackupSetupMethod.allCases : backupSetupMethods
+        } else {
+            secureBackupSetupMethods = VectorWellKnownBackupSetupMethod.allCases
         }
         
-        // Encryption configuration
-        if let vectorWellKnownEncryptionConfig = vectorWellKnownEncryptionConfiguration {
-            isE2EEByDefaultEnabled = vectorWellKnownEncryptionConfig.isE2EEByDefaultEnabled
-        } else {
-            // Enable E2EE by default when there is no value
-            isE2EEByDefaultEnabled = true
-        }
+        let deviceDehydrationEnabled = wellKnown?.jsonDictionary()["org.matrix.msc3814"] as? Bool == true
+
+        let encryptionConfiguration = HomeserverEncryptionConfiguration(isE2EEByDefaultEnabled: isE2EEByDefaultEnabled,
+                                                                        isSecureBackupRequired: isSecureBackupRequired,
+                                                                        secureBackupSetupMethods: secureBackupSetupMethods,
+                                                                        outboundKeysPreSharingMode: outboundKeysPreSharingMode,
+                                                                        deviceDehydrationEnabled: deviceDehydrationEnabled)
         
         // Jitsi configuration
-        let jitsiServerURL: URL
-        let hardcodedJitsiServerURL: URL = BuildSettings.jitsiServerUrl
+        let jitsiPreferredDomain: String?
+        let jitsiServerURL: URL?
+        let hardcodedJitsiServerURL: URL? = BuildSettings.jitsiServerUrl
         
-        if let vectorWellKnownJitsiConfig = vectorWellKnownJitsiConfiguration {
-            jitsiPreferredDomain = vectorWellKnownJitsiConfig.preferredDomain
-            jitsiServerURL = self.jitsiServerURL(from: jitsiPreferredDomain) ?? hardcodedJitsiServerURL
+        if let preferredDomain = vectorWellKnownJitsiConfiguration?.preferredDomain {
+            jitsiPreferredDomain = preferredDomain
+            jitsiServerURL = self.jitsiServerURL(from: preferredDomain) ?? hardcodedJitsiServerURL
         } else {
-            guard let hardcodedJitsiDomain = hardcodedJitsiServerURL.host else {
-                fatalError("[HomeserverConfigurationBuilder] Fail to get Jitsi domain from hardcoded Jitsi URL")
-            }
-            jitsiPreferredDomain = hardcodedJitsiDomain
+            jitsiPreferredDomain = hardcodedJitsiServerURL?.host
             jitsiServerURL = hardcodedJitsiServerURL
         }
+        
+        let useJitsiFor1To1Calls = vectorWellKnownJitsiConfiguration?.useFor1To1Calls
+        
+        // Tile server configuration
+        
+        let tileServerMapStyleURL: URL
+        if let mapStyleURLString = wellKnown?.tileServer?.mapStyleURLString,
+           let mapStyleURL = URL(string: mapStyleURLString) {
+            tileServerMapStyleURL = mapStyleURL
+        } else {
+            tileServerMapStyleURL = BuildSettings.defaultTileServerMapStyleURL
+        }
+        
+        let tileServerConfiguration = HomeserverTileServerConfiguration(mapStyleURL: tileServerMapStyleURL)
+        
+        // Migration banner configuration
+        
+        let migrationBannerConfiguration = self.getMigrationBannerConfiguration(from: vectorWellKnownMigrationBannerConfiguration)
         
         // Create HomeserverConfiguration
         
         let jitsiConfiguration = HomeserverJitsiConfiguration(serverDomain: jitsiPreferredDomain,
-                                                              serverURL: jitsiServerURL)
+                                                              serverURL: jitsiServerURL,
+                                                              useFor1To1Calls: useJitsiFor1To1Calls)
                 
-        return HomeserverConfiguration(jitsi: jitsiConfiguration, isE2EEByDefaultEnabled: isE2EEByDefaultEnabled)
+        return HomeserverConfiguration(jitsi: jitsiConfiguration,
+                                       encryption: encryptionConfiguration,
+                                       tileServer: tileServerConfiguration,
+                                       migrationBanner: migrationBannerConfiguration)
     }
     
     // MARK: - Private
@@ -107,6 +145,38 @@ final class HomeserverConfigurationBuilder: NSObject {
         return encryptionConfiguration
     }
     
+    /// Resolve the migration banner configuration.
+    ///
+    /// - When the `io.element.migration_banner` section is present, the banner follows its `enabled` value (enabled when not provided).
+    /// - When the section is missing (or the Well Known could not be parsed), the banner is hidden until
+    /// `BuildSettings.migrationBannerShowWhenNotConfiguredStartDate` and shown from this date on.
+    /// - Content: blank or missing values fall back to the default texts. A missing target app ID points to the default
+    /// replacement app, a blank one means that no download button is displayed.
+    private func getMigrationBannerConfiguration(from vectorWellKnownConfiguration: VectorWellKnownMigrationBannerConfiguration?) -> HomeserverMigrationBannerConfiguration {
+        let isEnabled: Bool
+        if let vectorWellKnownConfiguration = vectorWellKnownConfiguration {
+            isEnabled = vectorWellKnownConfiguration.isEnabled ?? true
+        } else {
+            isEnabled = currentDateProvider() >= BuildSettings.migrationBannerShowWhenNotConfiguredStartDate
+            MXLog.debug("[HomeserverConfigurationBuilder] getMigrationBannerConfiguration - No configuration found, enabled: \(isEnabled)")
+        }
+        
+        let defaultTargetAppStoreID = BuildSettings.replacementApp?.productID
+        let targetAppStoreID: String?
+        if let customTargetAppID = vectorWellKnownConfiguration?.targetAppID {
+            targetAppStoreID = customTargetAppID.isBlank ? nil : customTargetAppID
+        } else {
+            targetAppStoreID = defaultTargetAppStoreID
+        }
+        
+        return HomeserverMigrationBannerConfiguration(isEnabled: isEnabled,
+                                                      title: vectorWellKnownConfiguration?.title.nonBlank ?? VectorL10n.migrationBannerTitle,
+                                                      body: vectorWellKnownConfiguration?.body.nonBlank ?? VectorL10n.migrationBannerBody,
+                                                      buttonText: vectorWellKnownConfiguration?.buttonText.nonBlank ?? VectorL10n.migrationBannerDownloadButton,
+                                                      targetAppStoreID: targetAppStoreID,
+                                                      isTargetDefaultReplacementApp: targetAppStoreID != nil && targetAppStoreID == defaultTargetAppStoreID)
+    }
+    
     private func jitsiServerURL(from jitsiServerDomain: String) -> URL? {
         let jitsiStringURL: String
         if jitsiServerDomain.starts(with: "http") {
@@ -121,5 +191,21 @@ final class HomeserverConfigurationBuilder: NSObject {
         }
         
         return jitsiServerURL
+    }
+}
+
+private extension String {
+    var isBlank: Bool {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+private extension Optional where Wrapped == String {
+    /// The string when it contains something else than whitespaces, `nil` otherwise.
+    var nonBlank: String? {
+        guard let string = self, !string.isBlank else {
+            return nil
+        }
+        return string
     }
 }

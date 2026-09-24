@@ -3,3 +3,11 @@
 //
 
 #import "ThemeService.h"
+#import "AvatarGenerator.h"
+#import "BuildInfo.h"
+#import "ShareItemSender.h"
+#import "UserEncryptionTrustLevel.h"
+#import "RoomEncryptionTrustLevel.h"
+
+// MatrixKit imports
+#import "MatrixKit-Bridging-Header.h"

@@ -1,25 +1,16 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- Copyright 2019 New Vector Ltd
+Copyright 2019-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomActivitiesView.h"
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #import <objc/runtime.h>
 
@@ -124,7 +115,7 @@
     [self.resendButton setTitle:[VectorL10n retry] forState:UIControlStateNormal];
     self.resendButton.backgroundColor = ThemeService.shared.theme.tintColor;
     
-    UIImage *image = [[UIImage imageNamed:@"room_context_menu_delete"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    UIImage *image = [AssetImages.roomContextMenuDelete.image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     [self.deleteButton setImage:image forState:UIControlStateNormal];
     self.deleteButton.tintColor = ThemeService.shared.theme.warningColor;
     
@@ -174,7 +165,7 @@
     
     if (labelText.length)
     {
-        self.iconImageView.image = [UIImage imageNamed:@"error"];
+        self.iconImageView.image = AssetImages.error.image;
         self.iconImageView.tintColor = ThemeService.shared.theme.noticeColor;
         self.messageLabel.text = labelText;
         self.messageLabel.textColor = ThemeService.shared.theme.warningColor;
@@ -192,7 +183,7 @@
     
     if (labelText.length)
     {
-        self.iconImageView.image = [UIImage imageNamed:@"typing"];
+        self.iconImageView.image = AssetImages.typing.image;
         self.iconImageView.tintColor = ThemeService.shared.theme.tintColor;
         self.messageLabel.text = labelText;
         
@@ -309,7 +300,7 @@
     self.messageTextView.hidden = NO;
     self.messageTextView.backgroundColor = [UIColor clearColor];
     
-    self.iconImageView.image = [UIImage imageNamed:@"error"];
+    self.iconImageView.image = AssetImages.error.image;
     self.iconImageView.tintColor = ThemeService.shared.theme.noticeColor;
     self.iconImageView.hidden = NO;
     
@@ -352,11 +343,11 @@
         // Reuse MatrixKit as is for the beginning of hardLimit
         if ([limitType isEqualToString:kMXErrorResourceLimitExceededLimitTypeMonthlyActiveUserValue])
         {
-            [message appendString:[MatrixKitL10n loginErrorResourceLimitExceededMessageMonthlyActiveUser]];
+            [message appendString:[VectorL10n loginErrorResourceLimitExceededMessageMonthlyActiveUser]];
         }
         else
         {
-            [message appendString:[MatrixKitL10n loginErrorResourceLimitExceededMessageDefault]];
+            [message appendString:[VectorL10n loginErrorResourceLimitExceededMessageDefault]];
         }
     }
     else
@@ -484,6 +475,8 @@
 
 #pragma mark - UITextViewDelegate
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
 - (BOOL)textView:(UITextView *)textView shouldInteractWithURL:(NSURL *)URL inRange:(NSRange)characterRange
 {
     if ([[URL absoluteString] isEqualToString:@"onResendLink"])
@@ -559,6 +552,7 @@
     
     return YES;
 }
+#pragma clang diagnostic pop
 
 #pragma mark - UIGestureRecognizerDelegate
 

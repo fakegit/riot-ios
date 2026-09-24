@@ -25,6 +25,7 @@ enum RoomInfoListTarget: Equatable {
     case integrations
     case search
     case notifications
+    case pollHistory
     
     var tabIndex: UInt? {
         switch self {
@@ -47,4 +48,5 @@ enum RoomInfoListViewAction {
     case navigate(target: RoomInfoListTarget)
     case leave
     case cancel
+    case report
 }

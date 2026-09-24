@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -71,6 +62,12 @@ class SpaceMenuViewController: UIViewController {
         self.viewModel.viewDelegate = self
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        AnalyticsScreenTracker.trackScreen(.spaceMenu)
+    }
+    
     override var preferredStatusBarStyle: UIStatusBarStyle {
         return self.theme.statusBarStyle
     }
@@ -103,6 +100,12 @@ class SpaceMenuViewController: UIViewController {
         self.subtitleLabel.font = theme.fonts.caption1
         self.closeButton.backgroundColor = theme.roomInputTextBorder
         self.closeButton.tintColor = theme.noticeSecondaryColor
+        
+        if self.spaceId == SpaceListViewModel.Constants.homeSpaceId {
+            let defaultAsset = ThemeService.shared().isCurrentThemeDark() ? Asset.Images.spaceHomeIconDark : Asset.Images.spaceHomeIconLight
+            let avatarViewData = AvatarViewData(matrixItemId: self.spaceId, displayName: nil, avatarUrl: nil, mediaManager: session.mediaManager, fallbackImage: .image(defaultAsset.image, .center))
+            self.avatarView.fill(with: avatarViewData)
+        }
     }
     
     private func registerThemeServiceDidChangeThemeNotification() {
@@ -114,14 +117,23 @@ class SpaceMenuViewController: UIViewController {
     }
     
     private func setupViews() {
+        setupTableView()
+        
+        if self.spaceId == SpaceListViewModel.Constants.homeSpaceId {
+            self.titleLabel.text = VectorL10n.titleHome
+            self.subtitleLabel.text = VectorL10n.settingsTitle
+            
+            return
+        }
+
         guard let space = self.session.spaceService.getSpace(withId: self.spaceId), let summary = space.summary else {
             MXLog.error("[SpaceMenuViewController] setupViews: no space found")
             return
         }
         
-        let avatarViewData = AvatarViewData(matrixItemId: summary.roomId, displayName: summary.displayname, avatarUrl: summary.avatar, mediaManager: self.session.mediaManager, fallbackImage: .matrixItem(summary.roomId, summary.displayname))
+        let avatarViewData = AvatarViewData(matrixItemId: summary.roomId, displayName: summary.displayName, avatarUrl: summary.avatar, mediaManager: self.session.mediaManager, fallbackImage: .matrixItem(summary.roomId, summary.displayName))
 
-        self.titleLabel.text = space.summary?.displayname
+        self.titleLabel.text = space.summary?.displayName
         // TODO: display members instead once done on android
 //        self.subtitleLabel.text = space.membersId.count == 1 ? VectorL10n.roomTitleOneMember :
 //            VectorL10n.roomTitleMembers("\(space.membersId.count)")
@@ -130,7 +142,6 @@ class SpaceMenuViewController: UIViewController {
         
         self.closeButton.layer.masksToBounds = true
         self.closeButton.layer.cornerRadius = self.closeButton.bounds.height / 2
-        setupTableView()
     }
     
     private func setupTableView() {
@@ -139,6 +150,7 @@ class SpaceMenuViewController: UIViewController {
         self.tableView.estimatedRowHeight = Constants.estimatedRowHeight
         self.tableView.allowsSelection = true
         self.tableView.register(cellType: SpaceMenuListViewCell.self)
+        self.tableView.register(cellType: SpaceMenuSwitchViewCell.self)
         self.tableView.tableFooterView = UIView()
     }
     
@@ -235,12 +247,15 @@ extension SpaceMenuViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(for: indexPath, cellType: SpaceMenuListViewCell.self)
-        
         let viewData = viewModel.menuItems[indexPath.row]
         
-        cell.update(theme: self.theme)
-        cell.fill(with: viewData)
+        let cell = viewData.style == .toggle ? tableView.dequeueReusableCell(for: indexPath, cellType: SpaceMenuSwitchViewCell.self) :
+                        tableView.dequeueReusableCell(for: indexPath, cellType: SpaceMenuListViewCell.self)
+        
+        if let cell = cell as? SpaceMenuCell {
+            cell.update(theme: self.theme)
+            cell.update(with: viewData)
+        }
         
         return cell
     }

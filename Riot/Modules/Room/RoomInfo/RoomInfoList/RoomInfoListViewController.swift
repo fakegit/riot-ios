@@ -17,6 +17,8 @@
  */
 
 import UIKit
+import CommonKit
+import MatrixSDK
 
 final class RoomInfoListViewController: UIViewController {
     
@@ -38,8 +40,10 @@ final class RoomInfoListViewController: UIViewController {
     private var viewModel: RoomInfoListViewModelType!
     private var theme: Theme!
     private var errorPresenter: MXKErrorPresentation!
-    private var activityPresenter: ActivityIndicatorPresenter!
+    private var indicatorPresenter: UserIndicatorTypePresenterProtocol!
+    private var loadingIndicator: UserIndicator?
     private var isRoomDirect: Bool = false
+    private var screenTracker = AnalyticsScreenTracker(screen: .roomDetails)
     
     private lazy var closeButton: CloseButton = {
         let button = CloseButton()
@@ -50,8 +54,8 @@ final class RoomInfoListViewController: UIViewController {
     
     private lazy var basicInfoView: RoomInfoBasicView = {
         let view = RoomInfoBasicView.loadFromNib()
-        view.onTopicSizeChange = { _ in
-            self.view.setNeedsLayout()
+        view.onTopicSizeChange = { [weak self] _ in
+            self?.view.setNeedsLayout()
         }
         return view
     }()
@@ -67,6 +71,17 @@ final class RoomInfoListViewController: UIViewController {
             self.viewModel.process(viewAction: .leave)
         }))
         controller.mxk_setAccessibilityIdentifier("RoomSettingsVCLeaveAlert")
+        
+        return controller
+    }()
+    
+    private lazy var isLastOwnerAlertController: UIAlertController = {
+        let title = VectorL10n.error
+        let message = VectorL10n.roomParticipantsLeaveNotAllowedForLastOwnerMsg
+        let controller = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        
+        controller.addAction(UIAlertAction(title: VectorL10n.ok, style: .default, handler: nil))
+        controller.mxk_setAccessibilityIdentifier("RoomSettingsVCLastOwnerAlert")
         
         return controller
     }()
@@ -113,7 +128,9 @@ final class RoomInfoListViewController: UIViewController {
         // Do any additional setup after loading the view.
         
         self.setupViews()
-        self.activityPresenter = ActivityIndicatorPresenter()
+        
+        self.indicatorPresenter = UserIndicatorTypePresenter(presentingViewController: self)
+    
         self.errorPresenter = MXKErrorAlertPresentation()
         
         self.registerThemeServiceDidChangeThemeNotification()
@@ -128,10 +145,20 @@ final class RoomInfoListViewController: UIViewController {
         return self.theme.statusBarStyle
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        screenTracker.trackScreen()
+    }
+    
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         
         mainTableView.vc_relayoutHeaderView()
+    }
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        stopLoading()
     }
     
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -143,6 +170,7 @@ final class RoomInfoListViewController: UIViewController {
     // MARK: - Private
     
     private func updateSections(with viewData: RoomInfoListViewData) {
+        isRoomDirect = viewData.isDirect
         basicInfoView.configure(withViewData: viewData.basicInfoViewData)
         
         var tmpSections: [Section] = []
@@ -157,6 +185,11 @@ final class RoomInfoListViewController: UIViewController {
         let rowMembers = Row(type: .default, icon: Asset.Images.userIcon.image, text: text, accessoryType: .disclosureIndicator) {
             self.viewModel.process(viewAction: .navigate(target: .members))
         }
+        
+        let rowPollHistory = Row(type: .default, icon: Asset.Images.pollHistory.image, text: VectorL10n.roomDetailsPolls, accessoryType: .disclosureIndicator) {
+            self.viewModel.process(viewAction: .navigate(target: .pollHistory))
+        }
+        
         let rowUploads = Row(type: .default, icon: Asset.Images.scrollup.image, text: VectorL10n.roomDetailsFiles, accessoryType: .disclosureIndicator) {
             self.viewModel.process(viewAction: .navigate(target: .uploads))
         }
@@ -176,8 +209,15 @@ final class RoomInfoListViewController: UIViewController {
             rows.append(rowIntegrations)
         }
         rows.append(rowMembers)
+        
+        if BuildSettings.pollsEnabled {
+            rows.append(rowPollHistory)
+        }
+        
         rows.append(rowUploads)
-        rows.append(rowSearch)
+        if !viewData.isEncrypted {
+            rows.append(rowSearch)
+        }
 
         let sectionSettings = Section(header: VectorL10n.roomInfoListSectionOther,
                                       rows: rows,
@@ -187,14 +227,26 @@ final class RoomInfoListViewController: UIViewController {
             VectorL10n.roomParticipantsLeavePromptTitleForDm :
             VectorL10n.roomParticipantsLeavePromptTitle
         let rowLeave = Row(type: .destructive, icon: Asset.Images.roomActionLeave.image, text: leaveTitle, accessoryType: .none) {
-            self.present(self.leaveAlertController, animated: true, completion: nil)
+            if viewData.isLastOwner {
+                self.present(self.isLastOwnerAlertController, animated: true, completion: nil)
+            } else {
+                self.present(self.leaveAlertController, animated: true, completion: nil)
+            }
         }
         let sectionLeave = Section(header: nil,
                                    rows: [rowLeave],
                                    footer: nil)
         
+        let rowReport = Row(type: .destructive, icon: Asset.Images.error.image, text: VectorL10n.roomEventActionReport, accessoryType: .disclosureIndicator) {
+            self.viewModel.process(viewAction: .report)
+        }
+        let sectionReport = Section(header: nil,
+                                    rows: [rowReport],
+                                    footer: nil)
+        
         tmpSections.append(sectionSettings)
         tmpSections.append(sectionLeave)
+        tmpSections.append(sectionReport)
         
         sections = tmpSections
     }
@@ -229,7 +281,10 @@ final class RoomInfoListViewController: UIViewController {
         }
         
         self.title = ""
-        
+        self.vc_removeBackTitle()
+        // TODO: Check string with product (+ DM specific alt ?) and move this out of Untranslated.
+        self.navigationItem.backButtonTitle = VectorL10n.roomInfoBackButtonTitle
+
         mainTableView.register(headerFooterViewType: TextViewTableViewHeaderFooterView.self)
         mainTableView.sectionHeaderHeight = UITableView.automaticDimension
         mainTableView.estimatedSectionHeaderHeight = 50
@@ -251,17 +306,26 @@ final class RoomInfoListViewController: UIViewController {
     }
     
     private func renderLoading() {
-        self.activityPresenter.presentActivityIndicator(on: self.view, animated: true)
+        loadingIndicator = indicatorPresenter.present(
+            .loading(
+                label: VectorL10n.roomParticipantsLeaveProcessing,
+                isInteractionBlocking: true
+            )
+        )
     }
     
     private func renderLoaded(viewData: RoomInfoListViewData) {
-        self.activityPresenter.removeCurrentActivityIndicator(animated: true)
+        stopLoading()
         self.updateSections(with: viewData)
     }
     
     private func render(error: Error) {
-        self.activityPresenter.removeCurrentActivityIndicator(animated: true)
+        stopLoading()
         self.errorPresenter.presentError(from: self, forError: error, animated: true, handler: nil)
+    }
+    
+    private func stopLoading() {
+        loadingIndicator?.cancel()
     }
     
     // MARK: - Actions

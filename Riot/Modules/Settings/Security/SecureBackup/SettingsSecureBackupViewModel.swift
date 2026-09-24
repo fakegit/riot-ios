@@ -1,17 +1,8 @@
 /*
- Copyright 2021 New Vector Ltd
+Copyright 2021-2024 New Vector Ltd.
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import UIKit
@@ -24,6 +15,7 @@ final class SettingsSecureBackupViewModel: SettingsSecureBackupViewModelType {
     // MARK: Private
     private let recoveryService: MXRecoveryService
     private let keyBackup: MXKeyBackup
+    private var progressUpdateTimer: Timer?
 
     init(recoveryService: MXRecoveryService, keyBackup: MXKeyBackup) {
         self.recoveryService = recoveryService
@@ -106,17 +98,13 @@ final class SettingsSecureBackupViewModel: SettingsSecureBackupViewModelType {
             guard let keyBackupVersion = self.keyBackup.keyBackupVersion, let keyBackupVersionTrust = keyBackupVersionTrust else {
                 return
             }
-
-            // Get the backup progress before updating the state
-            self.keyBackup.backupProgress { [weak self] (progress) in
-                guard let self = self else {
-                    return
-                }
-                
-                let keyBackupState: SettingsSecureBackupViewState.KeyBackupState = .keyBackup(keyBackupVersion, keyBackupVersionTrust, progress)
-                let viewState: SettingsSecureBackupViewState = self.recoveryService.hasRecovery() ? .secureBackup(keyBackupState) : .noSecureBackup(keyBackupState)
-                self.viewDelegate?.settingsSecureBackupViewModel(self, didUpdateViewState: viewState)
-            }
+            
+            let importProgress = keyBackup.importProgress
+            let keyBackupState: SettingsSecureBackupViewState.KeyBackupState = .keyBackup(keyBackupVersion, keyBackupVersionTrust, importProgress)
+            let viewState: SettingsSecureBackupViewState = self.recoveryService.hasRecovery() ? .secureBackup(keyBackupState) : .noSecureBackup(keyBackupState)
+            self.viewDelegate?.settingsSecureBackupViewModel(self, didUpdateViewState: viewState)
+            scheduleProgressUpdateIfNecessary(keyBackupVersionTrust: keyBackupVersionTrust, progress: importProgress)
+            
         default:
             break
         }
@@ -128,6 +116,17 @@ final class SettingsSecureBackupViewModel: SettingsSecureBackupViewModelType {
 
         if let viewState = viewState {
             self.viewDelegate?.settingsSecureBackupViewModel(self, didUpdateViewState: viewState)
+        }
+    }
+    
+    private func scheduleProgressUpdateIfNecessary(keyBackupVersionTrust: MXKeyBackupVersionTrust, progress: Progress?) {
+        if progress != nil {
+            progressUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in
+                self?.computeState(withBackupVersionTrust: keyBackupVersionTrust)
+            }
+        } else {
+            progressUpdateTimer?.invalidate()
+            progressUpdateTimer = nil
         }
     }
 

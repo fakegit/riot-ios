@@ -11,7 +11,6 @@
 /* New action message from a specific person in a named room. */
 "ACTION_FROM_USER_IN_ROOM" = "%@: * %@ %@";
 /* New action message from a specific person, not referencing a room. */
-"IMAGE_FROM_USER" = "%@ enviou uma imagem %@";
 /* New action message from a specific person in a named room. */
 "IMAGE_FROM_USER_IN_ROOM" = "%@ postou uma imagem %@ em %@";
 /* A single unread message in a room */
@@ -33,7 +32,7 @@
 /* Look, stuff's happened, alright? Just open the app. */
 "MSGS_IN_TWO_PLUS_ROOMS" = "%@ novas mensagens em %@, %@ e outras";
 /* A user has invited you to a chat */
-"USER_INVITE_TO_CHAT" = "%@ tem conviado você para fazer chat";
+"USER_INVITE_TO_CHAT" = "%@ tem conviado você para conversar";
 /* A user has invited you to an (unamed) group chat */
 "USER_INVITE_TO_CHAT_GROUP_CHAT" = "%@ tem convidado você para um chat de grupo";
 /* A user has invited you to a named room */
@@ -115,4 +114,9 @@
 "REPLY_FROM_USER_TITLE" = "%@ respondeu";
 /** General **/
 
-"NOTIFICATION" = "Notificação";
+"Notification" = "Notificação";
+
+/* New file message from a specific person, not referencing a room. */
+"LOCATION_FROM_USER" = "%@ compartilhou a localização dela(e)";
+"VOICE_BROADCAST_FROM_USER" = "%@ iniciou uma transmissão de voz";
+"UNSUPPORTED_CALL" = "Chamada não suportada";

@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -40,6 +31,7 @@ class SpaceDetailPresenter: NSObject {
     }()
     private var session: MXSession!
     private var spaceId: String!
+    private var senderId: String?
 
     // MARK: - Public
     
@@ -59,15 +51,16 @@ class SpaceDetailPresenter: NSObject {
         self.show(with: session)
     }
     
-    @objc func present(forSpaceWithPublicRoom publicRoom: MXPublicRoom,
+    @objc func present(forSpaceWithPublicRoom publicRoom: MXPublicRoom, senderId: String?,
                  from viewController: UIViewController,
                  sourceView: UIView?,
                  session: MXSession,
                  animated: Bool) {
         self.session = session
         self.spaceId = publicRoom.roomId
+        self.senderId = senderId
 
-        self.viewModel = SpaceDetailViewModel(session: session, publicRoom: publicRoom)
+        self.viewModel = SpaceDetailViewModel(session: session, publicRoom: publicRoom, senderId: senderId)
         self.viewModel.coordinatorDelegate = self
         self.presentingViewController = viewController
         self.sourceView = sourceView
@@ -82,23 +75,24 @@ class SpaceDetailPresenter: NSObject {
     // MARK: - Private
     
     private func show(with session: MXSession) {
-        let viewController = SpaceDetailViewController.instantiate(mediaManager: session.mediaManager, viewModel: self.viewModel)
+        let viewController = SpaceDetailViewController.instantiate(mediaManager: session.mediaManager, viewModel: self.viewModel, showCancel: true)
         self.present(viewController, animated: true)
     }
     
     private func present(_ viewController: SpaceDetailViewController, animated: Bool) {
         
+        guard let presentingViewController = self.presentingViewController?.presentedViewController ?? self.presentingViewController else {
+            MXLog.error("[SpaceDetailPresenter] present no presentingViewController found")
+            return
+        }
+        
         if UIDevice.current.isPhone {
-            guard let rootViewController = self.presentingViewController else {
-                MXLog.error("[SpaceDetailPresenter] present no rootViewController found")
-                return
-            }
-
-            slidingModalPresenter.present(viewController, from: rootViewController.presentedViewController ?? rootViewController, animated: true, completion: nil)
+            slidingModalPresenter.present(viewController, from: presentingViewController, animated: true, completion: nil)
         } else {
             // Configure source view when view controller is presented with a popover
             viewController.modalPresentationStyle = .popover
-            if let sourceView = self.sourceView, let popoverPresentationController = viewController.popoverPresentationController {
+            if let popoverPresentationController = viewController.popoverPresentationController, let sourceView = sourceView ?? presentingViewController.view {
+                
                 popoverPresentationController.sourceView = sourceView
                 popoverPresentationController.sourceRect = sourceView.bounds
             }

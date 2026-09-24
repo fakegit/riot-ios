@@ -1,23 +1,18 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
-#import <MatrixKit/MatrixKit.h>
+#import "MatrixKit.h"
 
 @class RootTabEmptyView;
+@class AnalyticsScreenTracker;
+@class UserIndicatorStore;
+@class RecentCellContextMenuProvider;
 
 /**
  Notification to be posted when recents data is ready. Notification object will be the RecentsViewController instance.
@@ -40,7 +35,7 @@ FOUNDATION_EXPORT NSString *const RecentsViewControllerDataReadyNotification;
     /**
      Current alert (if any).
      */
-    UIAlertController *currentAlert;
+    __weak UIAlertController *currentAlert;
     
     /**
      The list of the section headers currently displayed in the recents table.
@@ -86,14 +81,28 @@ FOUNDATION_EXPORT NSString *const RecentsViewControllerDataReadyNotification;
 @property (nonatomic) CGFloat stickyHeaderHeight;
 
 /**
- The analytics instance screen name (Default is "RecentsScreen").
- */
-@property (nonatomic) NSString *screenName;
-
-/**
  Empty view to display when there is no item to show on the screen.
  */
 @property (nonatomic, weak) RootTabEmptyView *emptyView;
+
+/**
+ The bottom anchor used to layout `emptyView` in the absence of a FAB.
+ If this value is `nil` the empty view will be anchored to the bottom of its superview.
+ */
+@property (nonatomic, weak) NSLayoutYAxisAnchor *emptyViewBottomAnchor;
+
+/**
+ The screen timer used for analytics if they've been enabled. The default value is nil.
+ */
+@property (nonatomic) AnalyticsScreenTracker *screenTracker;
+
+/**
+ A store of user indicators that lets the room present and dismiss indicators without
+ worrying about the presentation context or memory management.
+ */
+@property (nonatomic, strong) UserIndicatorStore *userIndicatorStore;
+
+@property (nonatomic, readonly) RecentCellContextMenuProvider *contextMenuProvider;
 
 /**
  Return the sticky header for the specified section of the table view
@@ -141,6 +150,11 @@ FOUNDATION_EXPORT NSString *const RecentsViewControllerDataReadyNotification;
 - (void)onPlusButtonPressed;
 
 /**
+ Open screen to create a new chat room.
+ */
+- (void)startChat;
+
+/**
  Open screen to create a new room.
  */
 - (void)createNewRoom;
@@ -184,6 +198,11 @@ Enable/disable the notifications for the selected room.
  Show a public room.
  */
 - (void)openPublicRoom:(MXPublicRoom *)publicRoom;
+
+/**
+ Show a room using its roomID
+ */
+- (void)showRoomWithRoomId:(NSString*)roomId inMatrixSession:(MXSession*)matrixSession;
 
 #pragma mark - Scrolling
 

@@ -1,23 +1,14 @@
 // 
-// Copyright 2020 New Vector Ltd
+// Copyright 2020-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import UIKit
 import KeychainAccess
-import MatrixKit
 import CommonCrypto
+import MatrixSDK
 
 @objcMembers
 class EncryptionKeyManager: NSObject, MXKeyProviderDelegate {
@@ -31,6 +22,7 @@ class EncryptionKeyManager: NSObject, MXKeyProviderDelegate {
     private static let cryptoOlmPickleKey: KeyValueStoreKey = "cryptoOlmPickleKey"
     private static let roomLastMessageIv: KeyValueStoreKey = "roomLastMessageIv"
     private static let roomLastMessageAesKey: KeyValueStoreKey = "roomLastMessageAesKey"
+    private static let cryptoSDKStoreKey: KeyValueStoreKey = "cryptoSDKStoreKey"
 
     private let keychainStore: KeyValueStore = KeychainStore(withKeychain: Keychain(service: keychainService, accessGroup: BuildSettings.keychainAccessGroup))
 
@@ -47,6 +39,7 @@ class EncryptionKeyManager: NSObject, MXKeyProviderDelegate {
         generateKeyIfNotExists(forKey: EncryptionKeyManager.cryptoOlmPickleKey, size: 32)
         generateIvIfNotExists(forKey: EncryptionKeyManager.roomLastMessageIv)
         generateAesKeyIfNotExists(forKey: EncryptionKeyManager.roomLastMessageAesKey)
+        generateKeyIfNotExists(forKey: EncryptionKeyManager.cryptoSDKStoreKey, size: 32)
 
         assert(keychainStore.containsObject(forKey: EncryptionKeyManager.contactsIv), "[EncryptionKeyManager] initKeys: Failed to generate IV for acount")
         assert(keychainStore.containsObject(forKey: EncryptionKeyManager.contactsAesKey), "[EncryptionKeyManager] initKeys: Failed to generate AES Key for acount")
@@ -55,6 +48,7 @@ class EncryptionKeyManager: NSObject, MXKeyProviderDelegate {
         assert(keychainStore.containsObject(forKey: EncryptionKeyManager.cryptoOlmPickleKey), "[EncryptionKeyManager] initKeys: Failed to generate Key for olm pickle key")
         assert(keychainStore.containsObject(forKey: EncryptionKeyManager.roomLastMessageIv), "[EncryptionKeyManager] initKeys: Failed to generate IV for room last message")
         assert(keychainStore.containsObject(forKey: EncryptionKeyManager.roomLastMessageAesKey), "[EncryptionKeyManager] initKeys: Failed to generate AES Key for room last message encryption")
+        assert(keychainStore.containsObject(forKey: EncryptionKeyManager.cryptoSDKStoreKey), "[EncryptionKeyManager] initKeys: Failed to generate Key for crypto sdk store")
     }
     
     // MARK: - MXKeyProviderDelegate
@@ -64,6 +58,7 @@ class EncryptionKeyManager: NSObject, MXKeyProviderDelegate {
             || dataType == MXKAccountManagerDataType
             || dataType == MXCryptoOlmPickleKeyDataType
             || dataType == MXRoomLastMessageDataType
+            || dataType == MXCryptoSDKStoreKeyDataType
     }
             
     func hasKeyForData(ofType dataType: String) -> Bool {
@@ -77,7 +72,10 @@ class EncryptionKeyManager: NSObject, MXKeyProviderDelegate {
         case MXRoomLastMessageDataType:
             return keychainStore.containsObject(forKey: EncryptionKeyManager.roomLastMessageIv) &&
                 keychainStore.containsObject(forKey: EncryptionKeyManager.roomLastMessageAesKey)
+        case MXCryptoSDKStoreKeyDataType:
+            return keychainStore.containsObject(forKey: EncryptionKeyManager.cryptoSDKStoreKey)
         default:
+            MXLog.warning("[EncryptionKeyManager] hasKeyForData: No key for \(dataType)")
             return false
         }
     }
@@ -103,7 +101,12 @@ class EncryptionKeyManager: NSObject, MXKeyProviderDelegate {
                let aesKey = try? keychainStore.data(forKey: EncryptionKeyManager.roomLastMessageAesKey) {
                 return MXAesKeyData(iv: ivKey, key: aesKey)
             }
+        case MXCryptoSDKStoreKeyDataType:
+            if let key = try? keychainStore.data(forKey: EncryptionKeyManager.cryptoSDKStoreKey) {
+                return MXRawDataKey(key: key)
+            }
         default:
+            MXLog.failure("[EncryptionKeyManager] keyDataForData: Attempting to get data for unknown type", dataType)
             return nil
         }
         return nil

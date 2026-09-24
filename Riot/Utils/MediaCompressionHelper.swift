@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -22,11 +13,29 @@ class MediaCompressionHelper: NSObject {
     /// and the `showMediaCompressionPrompt` Riot setting.
     @objc static var defaultCompressionMode: MXKRoomInputToolbarCompressionMode {
         // When the compression mode build setting hasn't been customised, use the media compression prompt setting to determine what to do.
-        if BuildSettings.roomInputToolbarCompressionMode == MXKRoomInputToolbarCompressionModePrompt {
+        if BuildSettings.roomInputToolbarCompressionMode == .prompt {
             return RiotSettings.shared.showMediaCompressionPrompt ? MXKRoomInputToolbarCompressionModePrompt : MXKRoomInputToolbarCompressionModeNone
         } else {
             // Otherwise use the compression mode defined in the build settings.
-            return BuildSettings.roomInputToolbarCompressionMode
+            return BuildSettings.roomInputToolbarCompressionMode.mxkCompressionMode
+        }
+    }
+}
+
+extension BuildSettings.MediaCompressionMode {
+    /// The compression mode as an `MXKRoomInputToolbarCompressionMode` value.
+    var mxkCompressionMode: MXKRoomInputToolbarCompressionMode {
+        switch self {
+        case .prompt:
+            return MXKRoomInputToolbarCompressionModePrompt
+        case .small:
+            return MXKRoomInputToolbarCompressionModeSmall
+        case .medium:
+            return MXKRoomInputToolbarCompressionModeMedium
+        case .large:
+            return MXKRoomInputToolbarCompressionModeLarge
+        case .none:
+            return MXKRoomInputToolbarCompressionModeNone
         }
     }
 }

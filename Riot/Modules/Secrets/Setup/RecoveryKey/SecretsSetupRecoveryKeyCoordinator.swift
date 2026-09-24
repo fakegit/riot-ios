@@ -27,6 +27,7 @@ final class SecretsSetupRecoveryKeyCoordinator: SecretsSetupRecoveryKeyCoordinat
     
     private var secretsSetupRecoveryKeyViewModel: SecretsSetupRecoveryKeyViewModelType
     private let secretsSetupRecoveryKeyViewController: SecretsSetupRecoveryKeyViewController
+    private let cancellable: Bool
     
     // MARK: Public
 
@@ -40,11 +41,18 @@ final class SecretsSetupRecoveryKeyCoordinator: SecretsSetupRecoveryKeyCoordinat
     init(recoveryService: MXRecoveryService,
          passphrase: String?,
          passphraseOnly: Bool,
-         allowOverwrite: Bool = false) {
-        let secretsSetupRecoveryKeyViewModel = SecretsSetupRecoveryKeyViewModel(recoveryService: recoveryService, passphrase: passphrase, passphraseOnly: passphraseOnly, allowOverwrite: allowOverwrite)
-        let secretsSetupRecoveryKeyViewController = SecretsSetupRecoveryKeyViewController.instantiate(with: secretsSetupRecoveryKeyViewModel)
+         allowOverwrite: Bool = false,
+         cancellable: Bool,
+         dehydrationService: DehydrationService?) {
+        let secretsSetupRecoveryKeyViewModel = SecretsSetupRecoveryKeyViewModel(recoveryService: recoveryService,
+                                                                                passphrase: passphrase,
+                                                                                passphraseOnly: passphraseOnly,
+                                                                                allowOverwrite: allowOverwrite,
+                                                                                dehydrationService: dehydrationService)
+        let secretsSetupRecoveryKeyViewController = SecretsSetupRecoveryKeyViewController.instantiate(with: secretsSetupRecoveryKeyViewModel, cancellable: cancellable)
         self.secretsSetupRecoveryKeyViewModel = secretsSetupRecoveryKeyViewModel
         self.secretsSetupRecoveryKeyViewController = secretsSetupRecoveryKeyViewController
+        self.cancellable = cancellable
     }
     
     // MARK: - Public methods
@@ -55,6 +63,7 @@ final class SecretsSetupRecoveryKeyCoordinator: SecretsSetupRecoveryKeyCoordinat
     
     func toPresentable() -> UIViewController {
         return self.secretsSetupRecoveryKeyViewController
+            .vc_setModalFullScreen(!self.cancellable)
     }
 }
 

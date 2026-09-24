@@ -1,28 +1,21 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
 import Reusable
 
-class SpaceMenuListViewCell: UITableViewCell, Themable, NibReusable {
+class SpaceMenuListViewCell: UITableViewCell, SpaceMenuCell, NibReusable {
     
     // MARK: - Properties
     
     @IBOutlet private weak var iconView: UIImageView!
     @IBOutlet private weak var titleLabel: UILabel!
+    @IBOutlet private weak var betaView: UIView!
+    @IBOutlet private weak var betaLabel: UILabel!
     @IBOutlet private weak var selectionView: UIView!
 
     // MARK: - Private
@@ -49,7 +42,7 @@ class SpaceMenuListViewCell: UITableViewCell, Themable, NibReusable {
 
     // MARK: - Public
     
-    func fill(with viewData: SpaceMenuListItemViewData) {
+    func update(with viewData: SpaceMenuListItemViewData) {
         self.iconView.image = viewData.icon
         self.titleLabel.text = viewData.title
         
@@ -64,6 +57,10 @@ class SpaceMenuListViewCell: UITableViewCell, Themable, NibReusable {
             self.titleLabel.textColor = theme.colors.primaryContent
             self.iconView.tintColor = theme.colors.secondaryContent
         }
+        
+        self.betaView.layer.masksToBounds = true
+        self.betaView.layer.cornerRadius = 4
+        self.betaView.isHidden = !viewData.isBeta
     }
     
     func update(theme: Theme) {
@@ -73,5 +70,8 @@ class SpaceMenuListViewCell: UITableViewCell, Themable, NibReusable {
         self.titleLabel.textColor = theme.colors.primaryContent
         self.titleLabel.font = theme.fonts.body
         self.selectionView.backgroundColor = theme.colors.separator
+        self.betaLabel.font = theme.fonts.caption2SB
+        self.betaLabel.textColor = theme.colors.secondaryContent
+        self.betaView.backgroundColor = theme.colors.quinaryContent
     }
 }

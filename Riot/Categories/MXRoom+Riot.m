@@ -1,25 +1,17 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- Copyright 2018 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2018-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "MXRoom+Riot.h"
 
 #import "AvatarGenerator.h"
-
+#import "MatrixKit.h"
+#import "GeneratedInterface-Swift.h"
 #import <objc/runtime.h>
 
 @implementation MXRoom (Riot)
@@ -79,8 +71,15 @@
     // Check whether an override rule has been defined with the roomm id as rule id.
     // This kind of rule is created to mute the room
     MXPushRule* rule = [self getOverrideRoomPushRule];
-    if (rule)
+    if (rule && rule.enabled)
     {
+        // Support for MSC3987: The dont_notify push rule action is deprecated.
+        if (rule.actions.count == 0)
+        {
+            return true;
+        }
+        
+        // Support deprecated dont_notify push rule action for compatibility purposes.
         for (MXPushRuleAction *ruleAction in rule.actions)
         {
             if (ruleAction.actionType == MXPushRuleActionTypeDontNotify)
@@ -97,7 +96,7 @@
                         
                         if (key && pattern && [key isEqualToString:@"room_id"] && [pattern isEqualToString:self.roomId])
                         {
-                            return rule.enabled;
+                            return true;
                         }
                     }
                 }
@@ -112,13 +111,20 @@
 {
     // Check push rules at room level
     MXPushRule *rule = [self getRoomPushRule];
-    if (rule)
+    if (rule && rule.enabled)
     {
+        // Support for MSC3987: The dont_notify push rule action is deprecated.
+        if (rule.actions.count == 0)
+        {
+            return true;
+        }
+        
+        // Support deprecated dont_notify push rule action for compatibility purposes.
         for (MXPushRuleAction *ruleAction in rule.actions)
         {
             if (ruleAction.actionType == MXPushRuleActionTypeDontNotify)
             {
-                return rule.enabled;
+                return true;
             }
         }
     }
@@ -177,12 +183,21 @@
         // check if the user did not define one
         BOOL hasDontNotifyRule = NO;
         
-        for (MXPushRuleAction *ruleAction in rule.actions)
+        // Support for MSC3987: The dont_notify push rule action is deprecated.
+        if (rule.actions.count == 0)
         {
-            if (ruleAction.actionType == MXPushRuleActionTypeDontNotify)
+            hasDontNotifyRule = YES;
+        }
+        else
+        {
+            // Support deprecated dont_notify push rule action for compatibility purposes.
+            for (MXPushRuleAction *ruleAction in rule.actions)
             {
-                hasDontNotifyRule = YES;
-                break;
+                if (ruleAction.actionType == MXPushRuleActionTypeDontNotify)
+                {
+                    hasDontNotifyRule = YES;
+                    break;
+                }
             }
         }
         
@@ -255,12 +270,21 @@
         // check if the user did not define one
         BOOL hasDontNotifyRule = NO;
         
-        for (MXPushRuleAction *ruleAction in rule.actions)
+        // Support for MSC3987: The dont_notify push rule action is deprecated.
+        if (rule.actions.count == 0)
         {
-            if (ruleAction.actionType == MXPushRuleActionTypeDontNotify)
+            hasDontNotifyRule = YES;
+        }
+        else
+        {
+            // Support deprecated dont_notify push rule action for compatibility purposes.
+            for (MXPushRuleAction *ruleAction in rule.actions)
             {
-                hasDontNotifyRule = YES;
-                break;
+                if (ruleAction.actionType == MXPushRuleActionTypeDontNotify)
+                {
+                    hasDontNotifyRule = YES;
+                    break;
+                }
             }
         }
         
@@ -328,34 +352,17 @@
 {
     if (self.mxSession.crypto)
     {
-        [self.mxSession.crypto trustLevelSummaryForUserIds:@[userId] onComplete:^(MXUsersTrustLevelSummary *usersTrustLevelSummary) {
+        [self.mxSession.crypto trustLevelSummaryForUserIds:@[userId] forceDownload:NO success:^(MXUsersTrustLevelSummary *usersTrustLevelSummary) {
             
-            UserEncryptionTrustLevel userEncryptionTrustLevel;
-            double trustedDevicesPercentage = usersTrustLevelSummary.trustedDevicesProgress.fractionCompleted;
-            
-            if (trustedDevicesPercentage >= 1.0)
-            {
-                userEncryptionTrustLevel = UserEncryptionTrustLevelTrusted;
-            }
-            else if (trustedDevicesPercentage == 0.0)
-            {
-                // Verify if the user has the user has cross-signing enabled
-                if ([self.mxSession.crypto crossSigningKeysForUser:userId])
-                {
-                    userEncryptionTrustLevel = UserEncryptionTrustLevelNotVerified;
-                }
-                else
-                {
-                    userEncryptionTrustLevel = UserEncryptionTrustLevelNoCrossSigning;
-                }
-            }
-            else
-            {
-                userEncryptionTrustLevel = UserEncryptionTrustLevelWarning;
-            }
-            
+            MXCrossSigningInfo *crossSigningInfo = [self.mxSession.crypto.crossSigning crossSigningKeysForUser:userId];
+            EncryptionTrustLevel *encryption = [[EncryptionTrustLevel alloc] init];
+            UserEncryptionTrustLevel userEncryptionTrustLevel = [encryption userTrustLevelWithCrossSigning:crossSigningInfo
+                                                                                    trustedDevicesProgress:usersTrustLevelSummary.trustedDevicesProgress];
             onComplete(userEncryptionTrustLevel);
             
+        } failure:^(NSError *error) {
+            MXLogErrorDetails(@"[MXRoom+Riot] Error fetching trust level summary", error);
+            onComplete(UserEncryptionTrustLevelUnknown);
         }];
     }
     else
@@ -633,7 +640,7 @@
         }];
     }
     
-    [notificationCenter enableRule:rule isEnabled:YES];
+    [notificationCenter enableRule:rule isEnabled:YES completion:nil];
 }
 
 - (void)setNotificationCenterDidFailObserver:(id)anObserver
@@ -654,32 +661,6 @@
 - (id)notificationCenterDidUpdateObserver
 {
     return objc_getAssociatedObject(self, @selector(notificationCenterDidUpdateObserver));
-}
-
-#pragma mark - Unread messages
-
-- (RoomSentStatus)sentStatus
-{
-    RoomSentStatus status = RoomSentStatusOk;
-    NSArray<MXEvent*> *outgoingMsgs = self.outgoingMessages;
-
-    for (MXEvent *event in outgoingMsgs)
-    {
-        if (event.sentState == MXEventSentStateFailed)
-        {
-            status = RoomSentStatusSentFailed;
-
-            // Check if the error is due to unknown devices
-            if ([event.sentError.domain isEqualToString:MXEncryptingErrorDomain]
-                && event.sentError.code == MXEncryptingErrorUnknownDeviceCode)
-            {
-                status = RoomSentStatusSentFailedDueToUnknownDevices;
-                break;
-            }
-        }
-    }
-    
-    return status;
 }
 
 @end

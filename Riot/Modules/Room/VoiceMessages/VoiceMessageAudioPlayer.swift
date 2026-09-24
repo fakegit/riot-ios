@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -35,12 +26,13 @@ enum VoiceMessageAudioPlayerError: Error {
 class VoiceMessageAudioPlayer: NSObject {
     
     private var playerItem: AVPlayerItem?
-    private var audioPlayer: AVPlayer?
+    private var audioPlayer: AVQueuePlayer?
     
     private var statusObserver: NSKeyValueObservation?
     private var playbackBufferEmptyObserver: NSKeyValueObservation?
     private var rateObserver: NSKeyValueObservation?
     private var playToEndObserver: NSObjectProtocol?
+    private var appBackgroundObserver: NSObjectProtocol?
     
     private let delegateContainer = DelegateContainer()
     
@@ -52,7 +44,7 @@ class VoiceMessageAudioPlayer: NSObject {
             return false
         }
         
-        return (audioPlayer.rate > 0)
+        return audioPlayer.currentItem != nil && (audioPlayer.rate > 0)
     }
     
     var duration: TimeInterval {
@@ -60,7 +52,20 @@ class VoiceMessageAudioPlayer: NSObject {
     }
     
     var currentTime: TimeInterval {
-        return abs(CMTimeGetSeconds(audioPlayer?.currentTime() ?? .zero))
+        let currentTime = abs(CMTimeGetSeconds(audioPlayer?.currentTime() ?? .zero))
+        return currentTime.isFinite ? currentTime : .zero
+    }
+    
+    var playerItems: [AVPlayerItem] {
+        guard let audioPlayer = audioPlayer else {
+            return []
+        }
+        
+        return audioPlayer.items()
+    }
+    
+    var currentUrl: URL? {
+        return (audioPlayer?.currentItem?.asset as? AVURLAsset)?.url
     }
     
     private(set) var isStopped = true
@@ -84,9 +89,35 @@ class VoiceMessageAudioPlayer: NSObject {
         }
         
         playerItem = AVPlayerItem(url: url)
-        audioPlayer = AVPlayer(playerItem: playerItem)
+        audioPlayer = AVQueuePlayer(playerItem: playerItem)
         
         addObservers()
+    }
+    
+    func addContentFromURL(_ url: URL) {
+        let playerItem = AVPlayerItem(url: url)
+        audioPlayer?.insert(playerItem, after: nil)
+        
+        // audioPlayerDidFinishPlaying must be called on this last AVPlayerItem
+        NotificationCenter.default.removeObserver(playToEndObserver as Any)
+        playToEndObserver = NotificationCenter.default.addObserver(forName: Notification.Name.AVPlayerItemDidPlayToEndTime, object: playerItem, queue: nil) { [weak self] notification in
+            guard let self = self else { return }
+            
+            self.delegateContainer.notifyDelegatesWithBlock { delegate in
+                (delegate as? VoiceMessageAudioPlayerDelegate)?.audioPlayerDidFinishPlaying(self)
+            }
+        }
+    }
+    
+    func reloadContentIfNeeded() {
+        if let url, let audioPlayer, audioPlayer.currentItem == nil {
+            self.url = nil
+            loadContentFromURL(url)
+        }
+    }
+    
+    func removeAllPlayerItems() {
+        audioPlayer?.removeAllItems()
     }
     
     func unloadContent() {
@@ -96,6 +127,8 @@ class VoiceMessageAudioPlayer: NSObject {
     
     func play() {
         isStopped = false
+        
+        reloadContentIfNeeded()
         
         do {
             try AVAudioSession.sharedInstance().setCategory(AVAudioSession.Category.playback)
@@ -121,7 +154,7 @@ class VoiceMessageAudioPlayer: NSObject {
         audioPlayer?.seek(to: .zero)
     }
     
-    func seekToTime(_ time: TimeInterval, completionHandler:@escaping (Bool) -> Void = { _ in }) {
+    func seekToTime(_ time: TimeInterval, completionHandler: @escaping (Bool) -> Void = { _ in }) {
         audioPlayer?.seek(to: CMTime(seconds: time, preferredTimescale: 60000), completionHandler: completionHandler)
     }
     
@@ -198,6 +231,15 @@ class VoiceMessageAudioPlayer: NSObject {
                 (delegate as? VoiceMessageAudioPlayerDelegate)?.audioPlayerDidFinishPlaying(self)
             }
         }
+        
+        appBackgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+            guard let self = self, !BuildSettings.allowBackgroundAudioMessagePlayback else { return }
+            
+            self.pause()
+            self.delegateContainer.notifyDelegatesWithBlock { delegate in
+                (delegate as? VoiceMessageAudioPlayerDelegate)?.audioPlayerDidPausePlaying(self)
+            }
+        }
     }
     
     private func removeObservers() {
@@ -205,6 +247,7 @@ class VoiceMessageAudioPlayer: NSObject {
         playbackBufferEmptyObserver?.invalidate()
         rateObserver?.invalidate()
         NotificationCenter.default.removeObserver(playToEndObserver as Any)
+        NotificationCenter.default.removeObserver(appBackgroundObserver as Any)
     }
 }
 

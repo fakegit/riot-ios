@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -85,7 +76,7 @@ class VoiceMessageAttachmentCacheManager {
     }
     
     func loadAttachment(_ attachment: MXKAttachment, numberOfSamples: Int, completion: @escaping (Result<VoiceMessageAttachmentCacheManagerLoadResult, Error>) -> Void) {
-        guard attachment.type == MXKAttachmentTypeVoiceMessage else {
+        guard attachment.type == .voiceMessage || attachment.type == .audio else {
             completion(Result.failure(VoiceMessageAttachmentCacheManagerError.invalidAttachmentType))
             MXLog.error("[VoiceMessageAttachmentCacheManager] Invalid attachment type, ignoring request.")
             return
@@ -107,7 +98,7 @@ class VoiceMessageAttachmentCacheManager {
             try setupTemporaryFilesFolder()
         } catch {
             completion(Result.failure(VoiceMessageAttachmentCacheManagerError.preparationError(error)))
-            MXLog.error("[VoiceMessageAttachmentCacheManager] Failed creating temporary files folder with error: \(error)")
+            MXLog.error("[VoiceMessageAttachmentCacheManager] Failed creating temporary files folder", context: error)
             return
         }
         
@@ -137,10 +128,12 @@ class VoiceMessageAttachmentCacheManager {
         durations.removeAll()
         finalURLs.removeAll()
         
-        do {
-            try FileManager.default.removeItem(at: temporaryFilesFolderURL)
-        } catch {
-            MXLog.error("[VoiceMessageAttachmentCacheManager] Failed clearing cached disk files with error: \(error)")
+        if FileManager.default.fileExists(atPath: temporaryFilesFolderURL.path) {
+            do {
+                try FileManager.default.removeItem(at: temporaryFilesFolderURL)
+            } catch {
+                MXLog.error("[VoiceMessageAttachmentCacheManager] Failed clearing cached disk files", context: error)
+            }
         }
     }
     
@@ -176,7 +169,7 @@ class VoiceMessageAttachmentCacheManager {
                 }, failure: { error in
                     // A nil error in this case is a cancellation on the MXMediaLoader
                     if let error = error {
-                        MXLog.error("[VoiceMessageAttachmentCacheManager] Failed decrypting attachment with error: \(String(describing: error))")
+                        MXLog.error("[VoiceMessageAttachmentCacheManager] Failed decrypting attachment", context: error)
                         self.invokeFailureCallbacksForIdentifier(identifier, requiredNumberOfSamples: numberOfSamples, error: VoiceMessageAttachmentCacheManagerError.decryptionError(error))
                     }
                     semaphore.signal()
@@ -189,7 +182,7 @@ class VoiceMessageAttachmentCacheManager {
                 }, failure: { error in
                     // A nil error in this case is a cancellation on the MXMediaLoader
                     if let error = error {
-                        MXLog.error("[VoiceMessageAttachmentCacheManager] Failed preparing attachment with error: \(String(describing: error))")
+                        MXLog.error("[VoiceMessageAttachmentCacheManager] Failed preparing attachment", context: error)
                         self.invokeFailureCallbacksForIdentifier(identifier, requiredNumberOfSamples: numberOfSamples, error: VoiceMessageAttachmentCacheManagerError.preparationError(error))
                     }
                     semaphore.signal()
@@ -204,13 +197,15 @@ class VoiceMessageAttachmentCacheManager {
     }
     
     private func convertFileAtPath(_ path: String?, numberOfSamples: Int, identifier: String, semaphore: DispatchSemaphore) {
-        guard let filePath = path else {
+        guard let path else {
             return
         }
+
+        let filePath = URL(fileURLWithPath: path)
+        let fileExtension = filePath.hasSupportedAudioExtension ? filePath.pathExtension : "m4a"
+        let newURL = temporaryFilesFolderURL.appendingPathComponent(identifier).appendingPathExtension(fileExtension)
         
-        let newURL = temporaryFilesFolderURL.appendingPathComponent(ProcessInfo().globallyUniqueString).appendingPathExtension("m4a")
-        
-        VoiceMessageAudioConverter.convertToMPEG4AAC(sourceURL: URL(fileURLWithPath: filePath), destinationURL: newURL) { result in
+        let conversionCompletion: (Result<Void, VoiceMessageAudioConverterError>) -> Void = { result in
             self.workQueue.async {
                 switch result {
                 case .success:
@@ -232,18 +227,24 @@ class VoiceMessageAttachmentCacheManager {
                                     semaphore.signal()
                                 }
                             case .failure(let error):
-                                MXLog.error("[VoiceMessageAttachmentCacheManager] Failed retrieving audio duration with error: \(error)")
+                                MXLog.error("[VoiceMessageAttachmentCacheManager] Failed retrieving audio duration", context: error)
                                 self.invokeFailureCallbacksForIdentifier(identifier, requiredNumberOfSamples: numberOfSamples, error: VoiceMessageAttachmentCacheManagerError.durationError(error))
                                 semaphore.signal()
                             }
                         }
                     }
                 case .failure(let error):
-                    MXLog.error("[VoiceMessageAttachmentCacheManager] Failed converting voice message with error: \(error)")
+                    MXLog.error("[VoiceMessageAttachmentCacheManager] Failed converting voice message", context: error)
                     self.invokeFailureCallbacksForIdentifier(identifier, requiredNumberOfSamples: numberOfSamples, error: VoiceMessageAttachmentCacheManagerError.conversionError(error))
                     semaphore.signal()
                 }
             }
+        }
+        
+        if FileManager.default.fileExists(atPath: newURL.path) {
+            conversionCompletion(Result.success(()))
+        } else {
+            VoiceMessageAudioConverter.convertToMPEG4AACIfNeeded(sourceURL: filePath, destinationURL: newURL, completion: conversionCompletion)
         }
     }
     

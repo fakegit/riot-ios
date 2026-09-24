@@ -1,17 +1,8 @@
 /*
- Copyright 2018 New Vector Ltd
+Copyright 2018-2024 New Vector Ltd.
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 import UIKit
@@ -32,6 +23,7 @@ import DesignKit
 
     var searchBackgroundColor: UIColor { get }
     var searchPlaceholderColor: UIColor { get }
+    var searchResultHighlightColor: UIColor { get }
 
     var headerBackgroundColor: UIColor { get }
     var headerBorderColor: UIColor { get }
@@ -41,6 +33,7 @@ import DesignKit
     var textPrimaryColor: UIColor { get }
     var textSecondaryColor: UIColor { get }
     var textTertiaryColor: UIColor { get }
+    var textQuinaryColor: UIColor { get }
 
     var tintColor: UIColor { get }
     var tintBackgroundColor: UIColor { get }
@@ -95,20 +88,39 @@ import DesignKit
     
     /// Color to use in shadows. Should be contrast to `backgroundColor`.
     var shadowColor: UIColor { get }
+        
+    // Timeline cells
+
+    var roomCellIncomingBubbleBackgroundColor: UIColor { get }
+    
+    var roomCellOutgoingBubbleBackgroundColor: UIColor { get }
+    
+    // Localisation Cells
+    
+    var roomCellLocalisationIconStartedColor: UIColor { get }
+    
+    var roomCellLocalisationErrorColor: UIColor { get }
     
     // MARK: - Customisation methods
 
     
-    /// Apply the theme on a button.
+    /// Apply the theme on a tab bar.
     ///
-    /// - Parameter tabBar: The tabBar to customise.
+    /// - Parameter tabBar: The tab bar to customise.
     func applyStyle(onTabBar tabBar: UITabBar)
 
-    /// Apply the theme on a navigation bar
+    /// Apply the theme on a navigation bar, without enabling the iOS 15's scroll edge appearance.
     ///
     /// - Parameter navigationBar: the navigation bar to customise.
     func applyStyle(onNavigationBar navigationBar: UINavigationBar)
 
+    /// Apply the theme on a navigation bar.
+    ///
+    /// - Parameter navigationBar: the navigation bar to customise.
+    /// - Parameter modernScrollEdgeAppearance: whether or not to use the iOS 15 style scroll edge appearance
+    func applyStyle(onNavigationBar navigationBar: UINavigationBar,
+                    withModernScrollEdgeAppearance modernScrollEdgeAppearance: Bool)
+    
     ///  Apply the theme on a search bar.
     ///
     /// - Parameter searchBar: the search bar to customise.

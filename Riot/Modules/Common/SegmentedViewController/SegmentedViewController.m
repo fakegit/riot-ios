@@ -1,29 +1,17 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "SegmentedViewController.h"
 
 #import "ThemeService.h"
 
-#ifdef IS_SHARE_EXTENSION
-#import "RiotShareExtension-Swift.h"
-#else
-#import "Riot-Swift.h"
-#endif
+#import "GeneratedInterface-Swift.h"
 
 @interface SegmentedViewController ()
 {
@@ -50,7 +38,7 @@
     NSLayoutConstraint *leftMarkerViewConstraint;
     
     // Observe kThemeServiceDidChangeThemeNotification to handle user interface theme change.
-    id kThemeServiceDidChangeThemeNotificationObserver;
+    __weak id kThemeServiceDidChangeThemeNotificationObserver;
 }
 
 @end
@@ -169,6 +157,8 @@
     // Adjust Top
     [NSLayoutConstraint deactivateConstraints:@[self.selectionContainerTopConstraint]];
     
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated"
     // it is not possible to define a constraint to the topLayoutGuide in the xib editor
     // so do it in the code ..
     self.selectionContainerTopConstraint = [NSLayoutConstraint constraintWithItem:self.topLayoutGuide
@@ -178,13 +168,18 @@
                                                                   attribute:NSLayoutAttributeTop
                                                                  multiplier:1.0f
                                                                    constant:0.0f];
+    #pragma clang diagnostic pop
     
     [NSLayoutConstraint activateConstraints:@[self.selectionContainerTopConstraint]];
     
     [self createSegmentedViews];
     
+    MXWeakify(self);
+    
     // Observe user interface theme change.
     kThemeServiceDidChangeThemeNotificationObserver = [[NSNotificationCenter defaultCenter] addObserverForName:kThemeServiceDidChangeThemeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notif) {
+        
+        MXStrongifyAndReturnIfNil(self);
         
         [self userInterfaceThemeDidChange];
         

@@ -1,32 +1,33 @@
-// 
-// Copyright 2021 New Vector Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2021-2024 New Vector Ltd.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
-import Foundation
 import Combine
 import DesignKit
+import Foundation
 
-@available(iOS 14.0, *)
 /// Simple ViewModel that supports loading an avatar image
-class AvatarViewModel: InjectableObject, ObservableObject {
+final class AvatarViewModel: ObservableObject {
+    private let avatarService: AvatarServiceProtocol
     
-    @Inject var avatarService: AvatarServiceProtocol
-    
-    @Published private(set) var viewState = AvatarViewState.empty
+    init(avatarService: AvatarServiceProtocol) {
+        self.avatarService = avatarService
+    }
     
     private var cancellables = Set<AnyCancellable>()
+    
+    func placeholderAvatar(matrixItemId: String,
+                     displayName: String?,
+                     colorCount: Int) -> AvatarViewState {
+        let placeholderViewModel = PlaceholderAvatarViewModel(displayName: displayName,
+                                                              matrixItemId: matrixItemId,
+                                                              colorCount: colorCount)
+        
+        return .placeholder(placeholderViewModel.firstCharacterCapitalized, placeholderViewModel.stableColorIndex)
+    }
     
     /// Load an avatar
     /// - Parameters:
@@ -35,53 +36,31 @@ class AvatarViewModel: InjectableObject, ObservableObject {
     ///   - displayName: Display name of the avatar.
     ///   - colorCount: The count of total avatar colors used to generate the stable color index.
     ///   - avatarSize: The size of the avatar to fetch (as defined within DesignKit).
-    func loadAvatar(
-        mxContentUri: String?,
-        matrixItemId: String,
-        displayName: String?,
-        colorCount: Int,
-        avatarSize: AvatarSize) {
+    func loadAvatar(mxContentUri: String?,
+                    matrixItemId: String,
+                    displayName: String?,
+                    colorCount: Int,
+                    avatarSize: AvatarSize,
+                    avatarCompletion: @escaping (AvatarViewState) -> Void) {
+        guard let mxContentUri = mxContentUri, mxContentUri.count > 0 else {
+            avatarCompletion(placeholderAvatar(matrixItemId: matrixItemId, displayName: displayName, colorCount: colorCount))
+            return
+        }
         
-        self.viewState = .placeholder(
-            firstCharacterCapitalized(displayName),
-            stableColorIndex(matrixItemId: matrixItemId, colorCount: colorCount)
-        )
-        
-        guard let mxContentUri = mxContentUri else { return }
         avatarService.avatarImage(mxContentUri: mxContentUri, avatarSize: avatarSize)
             .sink { completion in
                 guard case let .failure(error) = completion else { return }
-                UILog.error("[AvatarService] Failed to retrieve avatar: \(error)")
+                UILog.error("[AvatarService] Failed to retrieve avatar", context: error)
+                // No need to call the completion, there's nothing we can do and the error is logged.
             } receiveValue: { image in
-                self.viewState = .avatar(image)
+                avatarCompletion(.avatar(image))
             }
             .store(in: &cancellables)
     }
-    
-    /// Get the first character of a string capialized or else an empty string.
-    /// - Parameter string: The input string to get the capitalized letter from.
-    /// - Returns: The capitalized first letter.
-    private func firstCharacterCapitalized(_ string: String?) -> String {
-        guard let character = string?.first else {
-            return ""
-        }
-        return String(character).capitalized
+}
+
+extension AvatarViewModel {
+    static func withMockedServices() -> AvatarViewModel {
+        .init(avatarService: MockAvatarService.example)
     }
-    
-    /// Provides the same color each time for a specified matrixId
-    ///
-    /// Same algorithm as in AvatarGenerator.
-    /// - Parameters:
-    ///   - matrixItemId: the matrix id used as input to create the stable index.
-    ///   - colorCount: The number of total colors we want to index in to.
-    /// - Returns: The stable index.
-    private func stableColorIndex(matrixItemId: String, colorCount: Int) -> Int {
-        // Sum all characters
-        let sum = matrixItemId.utf8
-            .map({ UInt($0) })
-            .reduce(0, +)
-        // modulo the color count
-        return Int(sum) % colorCount
-    }
-    
 }

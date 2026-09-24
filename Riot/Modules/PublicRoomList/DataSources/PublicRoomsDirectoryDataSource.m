@@ -1,25 +1,17 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "PublicRoomsDirectoryDataSource.h"
 
 #import "PublicRoomTableViewCell.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 #pragma mark - Constants definitions
 
@@ -46,6 +38,8 @@ static NSString *const kNSFWKeyword = @"nsfw";
     NSString *nextBatch;
 }
 
+@property (nonatomic, strong) NSRegularExpression *forbiddenTermsRegex;
+
 @end
 
 @implementation PublicRoomsDirectoryDataSource
@@ -57,6 +51,15 @@ static NSString *const kNSFWKeyword = @"nsfw";
     {
         rooms = [NSMutableArray array];
         _paginationLimit = 20;
+        
+        NSString *path = [[NSBundle mainBundle] pathForResource:@"forbidden_terms" ofType:@"txt"];
+        NSString *fileContents = [NSString stringWithContentsOfFile:path encoding: NSUTF8StringEncoding error:nil];
+        NSArray *forbiddenTerms = [fileContents componentsSeparatedByCharactersInSet: NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        
+        NSString *pattern = [NSString stringWithFormat:@"\\b(%@)\\b", [forbiddenTerms componentsJoinedByString:@"|"]];
+        pattern = [pattern stringByAppendingString:@"|(\\b18\\+)"]; // Special case "18+"
+        
+        _forbiddenTermsRegex = [[NSRegularExpression alloc] initWithPattern:pattern options:NSRegularExpressionCaseInsensitive error:nil];
     }
     return self;
 }
@@ -83,7 +86,7 @@ static NSString *const kNSFWKeyword = @"nsfw";
         else
         {
             // We display only Matrix rooms of the user's HS
-            directoryServerDisplayname = [MatrixKitL10n matrix];
+            directoryServerDisplayname = [VectorL10n matrix];
         }
     }
 
@@ -152,16 +155,6 @@ static NSString *const kNSFWKeyword = @"nsfw";
             _searchPattern = searchPattern;
             [self resetPagination];
         }
-    }
-}
-
-- (void)setShowNSFWRooms:(BOOL)showNSFWRooms
-{
-    if (showNSFWRooms != _showNSFWRooms)
-    {
-        _showNSFWRooms = showNSFWRooms;
-        
-        [self resetPagination];
     }
 }
 
@@ -254,14 +247,7 @@ static NSString *const kNSFWKeyword = @"nsfw";
             
             NSArray<MXPublicRoom*> *publicRooms;
             
-            if (self.showNSFWRooms)
-            {
-                publicRooms = publicRoomsResponse.chunk;
-            }
-            else
-            {
-                publicRooms = [self filterPublicRooms:publicRoomsResponse.chunk containingKeyword:kNSFWKeyword];
-            }
+            publicRooms = [self filterPublicRooms:publicRoomsResponse.chunk];
 
             [self->rooms addObjectsFromArray:publicRooms];
             self->nextBatch = publicRoomsResponse.nextBatch;
@@ -299,7 +285,7 @@ static NSString *const kNSFWKeyword = @"nsfw";
         {
             typeof(self) self = weakSelf;
 
-            if (!newPublicRoomsRequest || newPublicRoomsRequest.isCancelled)
+            if (error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled)
             {
                 // Do not take into account error coming from a cancellation
                 return;
@@ -338,15 +324,23 @@ static NSString *const kNSFWKeyword = @"nsfw";
     }
 }
 
-- (NSArray<MXPublicRoom*>*)filterPublicRooms:(NSArray<MXPublicRoom*>*)publicRooms containingKeyword:(NSString*)keyword
+- (NSArray<MXPublicRoom*>*)filterPublicRooms:(NSArray<MXPublicRoom*>*)publicRooms
 {
     NSMutableArray *filteredRooms = [NSMutableArray new];
 
     for (MXPublicRoom *publicRoom in publicRooms)
     {
-        if (NO == [[publicRoom.name lowercaseString] containsString:keyword]
-            && NO == [[publicRoom.topic lowercaseString] containsString:keyword])
-        {
+        BOOL shouldAllow = YES;
+        
+        if (publicRoom.name != nil) {
+            shouldAllow &= [self.forbiddenTermsRegex numberOfMatchesInString:publicRoom.name options:0 range:NSMakeRange(0, publicRoom.name.length)] == 0;
+        }
+        
+        if (publicRoom.topic != nil) {
+            shouldAllow &= [self.forbiddenTermsRegex numberOfMatchesInString:publicRoom.topic options:0 range:NSMakeRange(0, publicRoom.topic.length)] == 0;
+        }
+        
+        if (shouldAllow) {
             [filteredRooms addObject:publicRoom];
         }
     }

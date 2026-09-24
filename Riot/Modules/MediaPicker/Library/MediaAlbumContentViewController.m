@@ -1,25 +1,17 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "MediaAlbumContentViewController.h"
 
 #import <MobileCoreServices/MobileCoreServices.h>
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 @interface MediaAlbumContentViewController ()
 {
@@ -163,9 +155,6 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
-    // Screen tracking
-    [[Analytics sharedInstance] trackScreen:@"MediaAlbumContent"];
     
     self.navigationItem.title = _assetsCollection.localizedTitle;
     
@@ -271,10 +260,10 @@
             
         }];
         
-        cell.bottomLeftIcon.image = [UIImage imageNamed:@"video_icon"];
+        cell.bottomLeftIcon.image = AssetImages.videoIcon.image;
         cell.bottomLeftIcon.hidden = (asset.mediaType == PHAssetMediaTypeImage);
 
-        cell.bottomRightIcon.image = [UIImage imageNamed:@"selection_tick"];
+        cell.bottomRightIcon.image = AssetImages.selectionTick.image;
         cell.bottomRightIcon.tintColor = ThemeService.shared.theme.tintColor;
         cell.bottomRightIcon.hidden = !selectedAssets || (NSNotFound == [selectedAssets indexOfObject:asset]);
 
@@ -351,7 +340,7 @@
     selectedAssets = [NSMutableArray array];
 
     // Update the nav buttons
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:[MatrixKitL10n send] style:UIBarButtonItemStylePlain target:self action:@selector(onSelectionSend:)];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:[VectorL10n send] style:UIBarButtonItemStylePlain target:self action:@selector(onSelectionSend:)];
     self.navigationItem.rightBarButtonItem.enabled = NO;
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(onSelectionCancel:)];
 }

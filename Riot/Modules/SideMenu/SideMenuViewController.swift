@@ -48,6 +48,7 @@ final class SideMenuViewController: UIViewController {
     private var keyboardAvoider: KeyboardAvoider?
     private var errorPresenter: MXKErrorPresentation!
     private var activityPresenter: ActivityIndicatorPresenter!
+    private var screenTracker = AnalyticsScreenTracker(screen: .sidebar)
     
     private var sideMenuActionViews: [SideMenuActionView] = []
     private weak var sideMenuVersionView: SideMenuVersionView?
@@ -84,10 +85,7 @@ final class SideMenuViewController: UIViewController {
         super.viewWillAppear(animated)
         
         navigationController?.setNavigationBarHidden(true, animated: animated)
-    }
-    
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
+        screenTracker.trackScreen()
     }
     
     override var preferredStatusBarStyle: UIStatusBarStyle {
@@ -200,6 +198,10 @@ final class SideMenuViewController: UIViewController {
 
     
     // MARK: - Actions
+    
+    @IBAction func headerTapAction(sender: UIView) {
+        self.viewModel.process(viewAction: .tapHeader(sourceView: sender))
+    }
 }
 
 // MARK: - SideMenuViewModelViewDelegate

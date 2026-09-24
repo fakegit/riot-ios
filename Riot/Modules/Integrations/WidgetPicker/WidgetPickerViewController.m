@@ -1,17 +1,9 @@
 /*
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "WidgetPickerViewController.h"
@@ -19,7 +11,7 @@
 #import "WidgetManager.h"
 #import "WidgetViewController.h"
 #import "IntegrationManagerViewController.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 @interface WidgetPickerViewController () <ServiceTermsModalCoordinatorBridgePresenterDelegate>
 {
@@ -69,11 +61,11 @@
                                                    style:UIAlertActionStyleDefault
                                                  handler:^(UIAlertAction * _Nonnull action)
                            {
-                               // Hide back button title
-                               mxkViewController.navigationItem.backBarButtonItem =[[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-                               
-                               [self fetchWidgetURLAndDisplayUsingWidget:widget canPresentServiceTerms:YES];
-                           }];
+                // Hide back button title
+                [mxkViewController vc_removeBackTitle];
+
+                [self fetchWidgetURLAndDisplayUsingWidget:widget canPresentServiceTerms:YES];
+            }];
             [self.alertController addAction:alertAction];
         }
 
@@ -95,7 +87,7 @@
         }
 
         // Cancel
-        alertAction = [UIAlertAction actionWithTitle:[MatrixKitL10n cancel]
+        alertAction = [UIAlertAction actionWithTitle:[VectorL10n cancel]
                                                style:UIAlertActionStyleCancel
                                              handler:nil];
         [self.alertController addAction:alertAction];
@@ -151,7 +143,6 @@
     
     ServiceTermsModalCoordinatorBridgePresenter *serviceTermsModalCoordinatorBridgePresenter = [[ServiceTermsModalCoordinatorBridgePresenter alloc] initWithSession:widget.mxSession baseUrl:config.baseUrl
                                                                                                                                                         serviceType:MXServiceTypeIntegrationManager
-                                                                                                                                                       outOfContext:NO
                                                                                                                                                         accessToken:config.scalarToken];
     serviceTermsModalCoordinatorBridgePresenter.delegate = self;
     
@@ -173,15 +164,14 @@
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 
-- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidCancel:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter
+- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidDecline:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter session:(MXSession * _Nonnull)session
 {
     [coordinatorBridgePresenter dismissWithAnimated:YES completion:nil];
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 
-- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidDecline:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter session:(MXSession * _Nonnull)session
+- (void)serviceTermsModalCoordinatorBridgePresenterDelegateDidClose:(ServiceTermsModalCoordinatorBridgePresenter * _Nonnull)coordinatorBridgePresenter
 {
-    [coordinatorBridgePresenter dismissWithAnimated:YES completion:nil];
     self.serviceTermsModalCoordinatorBridgePresenter = nil;
 }
 

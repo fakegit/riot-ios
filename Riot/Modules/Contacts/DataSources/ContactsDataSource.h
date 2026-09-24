@@ -1,20 +1,12 @@
 /*
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
-#import <MatrixKit/MatrixKit.h>
+#import "MatrixKit.h"
 
 /**
  The state of the users search from the homeserver user directory.
@@ -49,6 +41,14 @@ typedef enum : NSUInteger
     NSMutableArray<MXKContact*> *filteredLocalContacts;
     NSMutableArray<MXKContact*> *filteredMatrixContacts;
 }
+
+/**
+ Whether the data source should include local contacts in the table view. The default
+ value is set at initialisation to match the `MXKAppSettings` value for `syncLocalContacts`.
+ Note: After updating this property, the table view's data will need to be reloaded for it to have
+ any effect.
+ */
+@property (nonatomic) BOOL showLocalContacts;
 
 /**
  Get the contact at the given index path.
@@ -87,18 +87,20 @@ typedef enum : NSUInteger
  
  @param section the section  index
  @param frame the drawing area for the header of the specified section.
+ @param tableView the table view
  @return the section header.
  */
-- (UIView *)viewForHeaderInSection:(NSInteger)section withFrame:(CGRect)frame;
+- (UIView *)viewForHeaderInSection:(NSInteger)section withFrame:(CGRect)frame inTableView:(UITableView *)tableView;
 
 /**
  Get the sticky header view for the specified section.
  
  @param section the section  index
  @param frame the drawing area for the header of the specified section.
+ @param tableView the table view
  @return the sticky header view.
  */
-- (UIView *)viewForStickyHeaderInSection:(NSInteger)section withFrame:(CGRect)frame;
+- (UIView *)viewForStickyHeaderInSection:(NSInteger)section withFrame:(CGRect)frame inTableView:(UITableView *)tableView;
 
 /**
  Refresh the contacts data source and notify its delegate.

@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
@@ -33,6 +24,8 @@ public class DarkColors {
         tile: UIColor(rgb:0x394049),
         navigation: UIColor(rgb:0x21262C),
         background: UIColor(rgb:0x15191E),
+        ems: UIColor(rgb: 0x7E69FF),
+        links: UIColor(rgb: 0x0086E6),
         namesAndAvatars: [
             UIColor(rgb:0x368BD6),
             UIColor(rgb:0xAC3BA8),
@@ -46,6 +39,5 @@ public class DarkColors {
     )
     
     public static var uiKit = ColorsUIKit(values: values)
-    @available(iOS 14.0, *)
     public static var swiftUI = ColorSwiftUI(values: values)
 }

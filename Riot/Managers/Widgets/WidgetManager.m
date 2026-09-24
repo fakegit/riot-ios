@@ -1,27 +1,16 @@
 /*
- Copyright 2017 Vector Creations Ltd
- Copyright 2019 New Vector Ltd
+Copyright 2019-2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "WidgetManager.h"
 
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 #import "JitsiWidgetData.h"
 #import "MXSession+Riot.h"
-
-#import <MatrixKit/MatrixKit.h>
 
 #pragma mark - Contants
 
@@ -280,6 +269,13 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
     NSString *widgetId = [NSString stringWithFormat:@"%@_%@_%@", kWidgetTypeJitsiV1, room.mxSession.myUser.userId, @((uint64_t)([[NSDate date] timeIntervalSince1970] * 1000))];
     
     NSURL *preferredJitsiServerUrl = [room.mxSession vc_homeserverConfiguration].jitsi.serverURL;
+    
+    if (!preferredJitsiServerUrl)
+    {
+        MXLogDebug(@"[WidgetManager] createJitsiWidgetInRoom: Error: No Jitsi server URL provided");
+        failure(self.errorForUnavailableJitsiURL);
+        return nil;
+    }
 
     JitsiService *jitsiService = JitsiService.shared;
     
@@ -340,7 +336,6 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
  Check user's power for widgets management in a room.
  
  @param room the room to check.
- @return an NSError if the user cannot act on widgets in this room. Else, nil.
  */
 - (void)checkWidgetPermissionInRoom:(MXRoom *)room success:(dispatch_block_t)success  failure:(void (^)(NSError *))failure
 {
@@ -350,7 +345,7 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
 
         // Check user's power in the room
         MXRoomPowerLevels *powerLevels = roomState.powerLevels;
-        NSInteger oneSelfPowerLevel = [powerLevels powerLevelOfUserWithUserID:room.mxSession.myUser.userId];
+        NSInteger oneSelfPowerLevel = [roomState powerLevelOfUserWithUserID:room.mxSession.myUser.userId];
 
         // The user must be able to send state events to manage widgets
         if (oneSelfPowerLevel < powerLevels.stateDefault)
@@ -408,6 +403,13 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
 
                 // Broadcast the generic notification
                 [[NSNotificationCenter defaultCenter] postNotificationName:kWidgetManagerDidUpdateWidgetNotification object:widget];
+                // End jitsi call if a active call exists and widget has been updated to not be active
+                if ([[AppDelegate theDelegate].callPresenter.jitsiVC.widget.widgetId isEqualToString: widget.widgetId] &&
+                     [[AppDelegate theDelegate].callPresenter.jitsiVC.widget.roomId isEqualToString: event.roomId] &&
+                     !widget.isActive)
+                {
+                    [[AppDelegate theDelegate].callPresenter endActiveJitsiCall];
+                }
             }
             else
             {
@@ -744,6 +746,8 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
     return configs[mxSession.myUser.userId].scalarToken;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated"
 - (void)loadConfigs
 {
     NSUserDefaults *userDefaults = [MXKAppSettings standardAppSettings].sharedUserDefaults;
@@ -773,6 +777,8 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
         NSData *configsData = [userDefaults objectForKey:@"integrationManagerConfigs"];
         if (configsData)
         {
+            // We need to map the config class name since the bundle name was updated otherwise unarchiving crashes.
+            [NSKeyedUnarchiver setClass:WidgetManagerConfig.class forClassName:@"Riot.WidgetManagerConfig"];
             configs = [NSMutableDictionary dictionaryWithDictionary:[NSKeyedUnarchiver unarchiveObjectWithData:configsData]];
         }
 
@@ -789,6 +795,7 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
     [userDefaults setObject:[NSKeyedArchiver archivedDataWithRootObject:configs]
                      forKey:@"integrationManagerConfigs"];
 }
+#pragma clang diagnostic pop
 
 
 #pragma mark - Errors
@@ -805,6 +812,13 @@ NSString *const WidgetManagerErrorDomain = @"WidgetManagerErrorDomain";
     return [NSError errorWithDomain:WidgetManagerErrorDomain
                                code:WidgetManagerErrorCodeDisabledIntegrationsServer
                            userInfo:@{NSLocalizedDescriptionKey: [VectorL10n widgetIntegrationManagerDisabled]}];
+}
+
+- (NSError*)errorForUnavailableJitsiURL
+{
+    return [NSError errorWithDomain:WidgetManagerErrorDomain
+                               code:WidgetManagerErrorCodeUnavailableJitsiURL
+                           userInfo:@{NSLocalizedDescriptionKey: VectorL10n.callJitsiUnableToStart}];
 }
 
 @end

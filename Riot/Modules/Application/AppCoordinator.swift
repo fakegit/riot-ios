@@ -1,21 +1,16 @@
 /*
- Copyright 2020 New Vector Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2020-2024 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
+import Combine
 import Foundation
 import Intents
+import MatrixSDK
+import CommonKit
+import UIKit
 
 #if DEBUG
 import FLEX
@@ -46,7 +41,7 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
         return AppNavigator(appCoordinator: self)
     }()
     
-    private weak var splitViewCoordinator: SplitViewCoordinatorType?
+    fileprivate weak var splitViewCoordinator: SplitViewCoordinatorType?
     fileprivate weak var sideMenuCoordinator: SideMenuCoordinatorType?
     
     private let userSessionsService: UserSessionsService
@@ -57,6 +52,8 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
     }
         
     private var currentSpaceId: String?
+    private var cancellables: Set<AnyCancellable> = .init()
+    private var pushRulesUpdater: PushRulesUpdater?
   
     // MARK: Public
     
@@ -72,21 +69,42 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
         super.init()
         
         setupFlexDebuggerOnWindow(window)
+        update(with: ThemeService.shared().theme)
     }
     
     // MARK: - Public methods
     
     func start() {
-        self.setupLogger()
-        self.setupTheme()
+        setupLogger()
+        setupTheme()
+        excludeAllItemsFromBackup()
+        setupPushRulesSessionEvents()
+        
+        // Setup navigation router store
+        _ = NavigationRouterStore.shared
+        
+        // Setup user location services
+        _ = UserLocationServiceProvider.shared
         
         if BuildSettings.enableSideMenu {
             self.addSideMenu()
         }
         
+        NotificationCenter.default.addObserver(forName: NSNotification.Name.appDelegateNetworkStatusDidChange, object: nil, queue: OperationQueue.main) { [weak self] notification in
+            guard let self = self else { return }
+
+            if AppDelegate.theDelegate().isOffline {
+                self.splitViewCoordinator?.showAppStateIndicator(with: VectorL10n.networkOfflineTitle, icon: UIImage(systemName: "wifi.slash"))
+            } else {
+                self.splitViewCoordinator?.hideAppStateIndicator()                
+            }
+        }
+        
         // NOTE: When split view is shown there can be no Matrix sessions ready. Keep this behavior or use a loading screen before showing the split view.
         self.showSplitView()
         MXLog.debug("[AppCoordinator] Showed split view")
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(self.themeDidChange), name: Notification.Name.themeServiceDidChangeTheme, object: nil)
     }
     
     func open(url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
@@ -102,6 +120,18 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
         }
     }
         
+    // MARK: - Theme management
+    
+    @objc private func themeDidChange() {
+        update(with: ThemeService.shared().theme)
+    }
+    
+    private func update(with theme: Theme) {
+        for window in UIApplication.shared.windows {
+            window.overrideUserInterfaceStyle = ThemeService.shared().theme.userInterfaceStyle
+        }
+    }
+    
     // MARK: - Private methods
     private func setupLogger() {
         UILog.configure(logger: MatrixSDKLogger.self)
@@ -109,21 +139,31 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
     
     private func setupTheme() {
         ThemeService.shared().themeId = RiotSettings.shared.userInterfaceTheme
-        if #available(iOS 14.0, *) {
-            // Set theme id from current theme.identifier, themeId can be nil.
-            if let themeId = ThemeIdentifier(rawValue: ThemeService.shared().theme.identifier) {
-                ThemePublisher.configure(themeId: themeId)
-            } else {
-                MXLog.error("[AppCoordinator] No theme id found to update ThemePublisher")
-            }
-            
-            // Always republish theme change events, and again always getting the identifier from the theme.
-            let themeIdPublisher = NotificationCenter.default.publisher(for: Notification.Name.themeServiceDidChangeTheme)
-                .compactMap({ _ in ThemeIdentifier(rawValue: ThemeService.shared().theme.identifier) })
-                .eraseToAnyPublisher()
 
-            ThemePublisher.shared.republish(themeIdPublisher: themeIdPublisher)
+        // Set theme id from current theme.identifier, themeId can be nil.
+        if let themeId = ThemeIdentifier(rawValue: ThemeService.shared().theme.identifier) {
+            ThemePublisher.configure(themeId: themeId)
+        } else {
+            MXLog.error("[AppCoordinator] No theme id found to update ThemePublisher")
         }
+        
+        // Always republish theme change events, and again always getting the identifier from the theme.
+        let themeIdPublisher = NotificationCenter.default.publisher(for: Notification.Name.themeServiceDidChangeTheme)
+            .compactMap({ _ in ThemeIdentifier(rawValue: ThemeService.shared().theme.identifier) })
+            .eraseToAnyPublisher()
+
+        ThemePublisher.shared.republish(themeIdPublisher: themeIdPublisher)
+    }
+    
+    private func excludeAllItemsFromBackup() {
+        let manager = FileManager.default
+        
+        // Individual files and directories created by the application or SDK are excluded case-by-case,
+        // but sometimes the lifecycle of a file is not directly controlled by the app (e.g. plists for
+        // UserDefaults). For that reason the app will always exclude all top-level directories as well
+        // as individual files.
+        manager.excludeAllUserDirectoriesFromBackup()
+        manager.excludeAllAppGroupDirectoriesFromBackup()
     }
     
     private func showAuthentication() {
@@ -168,8 +208,8 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
         let canOpenLink: Bool
         
         switch deepLinkOption {
-        case .connect(let loginToken, let transactionId):
-            canOpenLink = self.legacyAppDelegate.continueSSOLogin(withToken: loginToken, txnId: transactionId)
+        case .connect(let loginToken, let transactionID):
+            canOpenLink = AuthenticationService.shared.continueSSOLogin(with: loginToken, and: transactionID)
         }
         
         return canOpenLink
@@ -195,9 +235,11 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
         case .homeSpace:
             MXLog.verbose("Switch to home space")
             self.navigateToSpace(with: nil)
+            Analytics.shared.activeSpace = nil
         case .space(let spaceId):
             MXLog.verbose("Switch to space with id: \(spaceId)")
             self.navigateToSpace(with: spaceId)
+            Analytics.shared.activeSpace = userSessionsService.mainUserSession?.matrixSession.spaceService.getSpace(withId: spaceId)
         }
     }
     
@@ -212,6 +254,47 @@ final class AppCoordinator: NSObject, AppCoordinatorType {
         // Reload split view with selected space id
         self.splitViewCoordinator?.start(with: spaceId)
     }
+    
+    private func setupPushRulesSessionEvents() {
+        let sessionReady = NotificationCenter.default.publisher(for: .mxSessionStateDidChange)
+            .compactMap { $0.object as? MXSession }
+            .filter { $0.state == .running }
+            .removeDuplicates { session1, session2 in
+                session1 == session2
+            }
+        
+        sessionReady
+            .sink { [weak self] session in
+                self?.setupPushRulesUpdater(session: session)
+            }
+            .store(in: &cancellables)
+        
+        
+        let sessionClosed = NotificationCenter.default.publisher(for: .mxSessionStateDidChange)
+            .compactMap { $0.object as? MXSession }
+            .filter { $0.state == .closed }
+        
+        sessionClosed
+            .sink { [weak self] _ in
+                self?.pushRulesUpdater = nil
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func setupPushRulesUpdater(session: MXSession) {
+        pushRulesUpdater = .init(notificationSettingsService: MXNotificationSettingsService(session: session))
+        
+        let applicationDidBecomeActive = NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification).eraseOutput()
+        let needsCheckPublisher = applicationDidBecomeActive.merge(with: Just(())).eraseToAnyPublisher()
+        
+        needsCheckPublisher
+            .sink { _ in
+                Task { @MainActor [weak self] in
+                    await self?.pushRulesUpdater?.syncRulesIfNeeded()
+                }
+            }
+            .store(in: &cancellables)
+    }
 }
 
 // MARK: - LegacyAppDelegateDelegate
@@ -225,13 +308,14 @@ extension AppCoordinator: LegacyAppDelegateDelegate {
     }
     
     func legacyAppDelegateRestoreEmptyDetailsViewController(_ legacyAppDelegate: LegacyAppDelegate!) {
-        self.splitViewCoordinator?.restorePlaceholderDetails()
+        self.splitViewCoordinator?.resetDetails(animated: false)
     }
     
     func legacyAppDelegate(_ legacyAppDelegate: LegacyAppDelegate!, didAddMatrixSession session: MXSession!) {
     }
     
-    func legacyAppDelegate(_ legacyAppDelegate: LegacyAppDelegate!, didRemoveMatrixSession session: MXSession!) {
+    func legacyAppDelegate(_ legacyAppDelegate: LegacyAppDelegate!, didRemoveMatrixSession session: MXSession?) {
+        guard let session = session else { return }
         // Handle user session removal on clear cache. On clear cache the account has his session closed but the account is not removed.
         self.userSessionsService.removeUserSession(relatedToMatrixSession: session)
     }
@@ -272,8 +356,6 @@ fileprivate class AppNavigator: AppNavigatorProtocol {
     
     private unowned let appCoordinator: AppCoordinator
     
-    let alert: AlertPresentable
-    
     lazy var sideMenu: SideMenuPresentable = {
         guard let sideMenuCoordinator = appCoordinator.sideMenuCoordinator else {
             fatalError("sideMenuCoordinator is not initialized")
@@ -281,12 +363,11 @@ fileprivate class AppNavigator: AppNavigatorProtocol {
         
         return SideMenuPresenter(sideMenuCoordinator: sideMenuCoordinator)
     }()
-    
+
     // MARK: - Setup
     
     init(appCoordinator: AppCoordinator) {
         self.appCoordinator = appCoordinator
-        self.alert = AppAlertPresenter(legacyAppDelegate: appCoordinator.legacyAppDelegate)
     }
     
     // MARK: - Public

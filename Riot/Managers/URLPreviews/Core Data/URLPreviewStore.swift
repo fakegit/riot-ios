@@ -1,17 +1,8 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import CoreData
@@ -59,7 +50,15 @@ class URLPreviewStore {
         // Load the persistent stores into the container
         container.loadPersistentStores { storeDescription, error in
             if let error = error {
-                MXLog.error("[URLPreviewStore] Core Data container error: \(error.localizedDescription)")
+                MXLog.error("[URLPreviewStore] Core Data container", context: error)
+            }
+            
+            if let url = storeDescription.url {
+                do {
+                    try FileManager.default.excludeItemFromBackup(at: url)
+                } catch {
+                    MXLog.error("[URLPreviewStore] Cannot exclude Core Data from backup", context: error)
+                }
             }
         }
     }
@@ -122,7 +121,7 @@ class URLPreviewStore {
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
         } catch {
-            MXLog.error("[URLPreviewStore] Error executing batch delete request: \(error.localizedDescription)")
+            MXLog.error("[URLPreviewStore] Error executing batch delete request", context: error)
         }
     }
     
@@ -132,7 +131,7 @@ class URLPreviewStore {
             _ = try context.execute(NSBatchDeleteRequest(fetchRequest: URLPreviewDataMO.fetchRequest()))
             _ = try context.execute(NSBatchDeleteRequest(fetchRequest: URLPreviewUserDataMO.fetchRequest()))
         } catch {
-            MXLog.error("[URLPreviewStore] Error executing batch delete request: \(error.localizedDescription)")
+            MXLog.error("[URLPreviewStore] Error executing batch delete request", context: error)
         }
     }
     
@@ -163,7 +162,7 @@ class URLPreviewStore {
         do {
             try context.save()
         } catch {
-            MXLog.error("[URLPreviewStore] Error saving changes: \(error.localizedDescription)")
+            MXLog.error("[URLPreviewStore] Error saving changes", context: error)
         }
     }
 }

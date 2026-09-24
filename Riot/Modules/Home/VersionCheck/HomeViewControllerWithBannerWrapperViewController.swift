@@ -1,26 +1,21 @@
 // 
-// Copyright 2021 New Vector Ltd
+// Copyright 2021-2024 New Vector Ltd.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
 
-class HomeViewControllerWithBannerWrapperViewController: MXKActivityHandlingViewController, BannerPresentationProtocol {
+class HomeViewControllerWithBannerWrapperViewController: UIViewController, MXKViewControllerActivityHandling, BannerPresentationProtocol, MasterTabBarItemDisplayProtocol {
     
     @objc let homeViewController: HomeViewController
     private var bannerContainerView: UIView!
     private var stackView: UIStackView!
+    
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        homeViewController.preferredStatusBarStyle
+    }
     
     init(viewController: HomeViewController) {
         self.homeViewController = viewController
@@ -41,25 +36,29 @@ class HomeViewControllerWithBannerWrapperViewController: MXKActivityHandlingView
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        homeViewController.willMove(toParent: self)
-        
         view.backgroundColor = .clear
         
         stackView = UIStackView()
+        stackView.translatesAutoresizingMaskIntoConstraints = false
         stackView.axis = .vertical
         stackView.distribution = .fill
         stackView.alignment = .fill
         
-        view.vc_addSubViewMatchingParent(stackView)
+        view.addSubview(stackView)
+        NSLayoutConstraint.activate([stackView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor),
+                                     stackView.leftAnchor.constraint(equalTo: self.view.leftAnchor),
+                                     stackView.rightAnchor.constraint(equalTo: self.view.rightAnchor),
+                                     stackView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)])
 
         addChild(homeViewController)
         stackView.addArrangedSubview(homeViewController.view)
         homeViewController.didMove(toParent: self)
     }
-    
+        
     // MARK: - BannerPresentationProtocol
     
-    func presentBannerView(_ bannerView: UIView, animated: Bool) {
+    @discardableResult
+    func presentBannerView(_ bannerView: UIView, animated: Bool) -> Bool {
         bannerView.alpha = 0.0
         bannerView.isHidden = true
         self.stackView.insertArrangedSubview(bannerView, at: 0)
@@ -70,6 +69,8 @@ class HomeViewControllerWithBannerWrapperViewController: MXKActivityHandlingView
             bannerView.isHidden = false
             self.stackView.layoutIfNeeded()
         }
+        
+        return true
     }
     
     func dismissBannerView(animated: Bool) {
@@ -84,5 +85,41 @@ class HomeViewControllerWithBannerWrapperViewController: MXKActivityHandlingView
         } completion: { _ in
             bannerView.removeFromSuperview()
         }
+    }
+    
+    func dismissBannerView(_ bannerView: UIView, animated: Bool) {
+        guard stackView.arrangedSubviews.count > 1, self.stackView.arrangedSubviews.first === bannerView else {
+            return
+        }
+        
+        dismissBannerView(animated: animated)
+    }
+    
+    // MARK: - MXKViewControllerActivityHandling
+    var activityIndicator: UIActivityIndicatorView! {
+        get {
+            return homeViewController.activityIndicator
+        }
+        set {
+            homeViewController.activityIndicator = newValue
+        }
+    }
+    
+    var providesCustomActivityIndicator: Bool {
+        return homeViewController.providesCustomActivityIndicator
+    }
+
+    func startActivityIndicator() {
+        homeViewController.startActivityIndicator()
+    }
+
+    func stopActivityIndicator() {
+        homeViewController.stopActivityIndicator()
+    }
+    
+    // MARK: - MasterTabBarItemDisplayProtocol
+    
+    var masterTabBarItemTitle: String {
+        return VectorL10n.titleHome
     }
 }

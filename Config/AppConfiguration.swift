@@ -1,21 +1,12 @@
 // 
+// Copyright 2024 New Vector Ltd.
 // Copyright 2020 Vector Creations Ltd
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
 //
 
 import Foundation
-import MatrixKit
 
 /// AppConfiguration is CommonConfiguration plus configurations dedicated to the app
 class AppConfiguration: CommonConfiguration {
@@ -31,9 +22,10 @@ class AppConfiguration: CommonConfiguration {
         // Enable CallKit for app
         MXKAppSettings.standard()?.isCallKitEnabled = true
         
-        // Get modular widget events in rooms histories
+        // Get additional events (modular widget, voice broadcast...)
         MXKAppSettings.standard()?.addSupportedEventTypes([kWidgetMatrixEventTypeString,
-                                                           kWidgetModularEventTypeString])
+                                                           kWidgetModularEventTypeString,
+                                                           VoiceBroadcastSettings.voiceBroadcastInfoContentKeyType])
         
         // Hide undecryptable messages that were sent while the user was not in the room
         MXKAppSettings.standard()?.hidePreJoinedUndecryptableEvents = true

@@ -1,68 +1,59 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
- http://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "RoomInputToolbarView.h"
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
-#import "GBDeviceInfo_iOS.h"
+static const CGFloat kContextBarHeight = 24;
+static const CGFloat kActionMenuAttachButtonSpringVelocity = 7;
+static const CGFloat kActionMenuAttachButtonSpringDamping = .45;
 
-#import "UINavigationController+Riot.h"
+static const NSTimeInterval kSendModeAnimationDuration = .15;
+static const NSTimeInterval kActionMenuAttachButtonAnimationDuration = .4;
+static const NSTimeInterval kActionMenuContentAlphaAnimationDuration = .2;
+static const NSTimeInterval kActionMenuComposerHeightAnimationDuration = .3;
 
-#import "WidgetManager.h"
-#import "IntegrationManagerViewController.h"
+@interface RoomInputToolbarView() <UITextViewDelegate, RoomInputToolbarTextViewDelegate>
 
-const double kContextBarHeight = 24;
-const NSTimeInterval kSendModeAnimationDuration = .15;
-const NSTimeInterval kActionMenuAttachButtonAnimationDuration = .4;
-const CGFloat kActionMenuAttachButtonSpringVelocity = 7;
-const CGFloat kActionMenuAttachButtonSpringDamping = .45;
-const NSTimeInterval kActionMenuContentAlphaAnimationDuration = .2;
-const NSTimeInterval kActionMenuComposerHeightAnimationDuration = .3;
-const CGFloat kComposerContainerTrailingPadding = 12;
+@property (nonatomic, weak) IBOutlet UIView *mainToolbarView;
 
-@interface RoomInputToolbarView()
-{
-    // The intermediate action sheet
-    UIAlertController *actionSheet;
-}
+@property (nonatomic, weak) IBOutlet UIButton *attachMediaButton;
+
+@property (nonatomic, weak) IBOutlet RoomInputToolbarTextView *textView;
+@property (nonatomic, weak) IBOutlet UIImageView *inputTextBackgroundView;
+
+@property (nonatomic, weak) IBOutlet UIImageView *inputContextImageView;
+@property (nonatomic, weak) IBOutlet UILabel *inputContextLabel;
+@property (nonatomic, weak) IBOutlet UIButton *inputContextButton;
+
+@property (nonatomic, weak) IBOutlet RoomActionsBar *actionsBar;
+
+@property (nonatomic, weak) IBOutlet NSLayoutConstraint *mainToolbarMinHeightConstraint;
+@property (nonatomic, weak) IBOutlet NSLayoutConstraint *mainToolbarHeightConstraint;
+@property (nonatomic, weak) IBOutlet NSLayoutConstraint *messageComposerContainerTrailingConstraint;
+@property (nonatomic, weak) IBOutlet NSLayoutConstraint *inputContextViewHeightConstraint;
+
+@property (nonatomic, weak) UIView *voiceMessageToolbarView;
+
+@property (nonatomic, assign) CGFloat expandedMainToolbarHeight;
 
 @end
 
 @implementation RoomInputToolbarView
 @dynamic delegate;
 
-+ (UINib *)nib
++ (MXKRoomInputToolbarView *)instantiateRoomInputToolbarView
 {
-    return [UINib nibWithNibName:NSStringFromClass([RoomInputToolbarView class])
-                          bundle:[NSBundle bundleForClass:[RoomInputToolbarView class]]];
-}
-
-+ (instancetype)roomInputToolbarView
-{
-    if ([[self class] nib])
-    {
-        return [[[self class] nib] instantiateWithOwner:nil options:nil].firstObject;
-    }
-    else
-    {
-        return [[self alloc] init];
-    }
+    UINib *nib = [UINib nibWithNibName:NSStringFromClass([RoomInputToolbarView class]) bundle:nil];
+    return [nib instantiateWithOwner:nil options:nil].firstObject;
 }
 
 - (void)awakeFromNib
@@ -71,25 +62,20 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     
     _sendMode = RoomInputToolbarViewSendModeSend;
     self.inputContextViewHeightConstraint.constant = 0;
+    self.inputContextLabel.isAccessibilityElement = NO;
+    self.inputContextButton.isAccessibilityElement = NO;
 
     [self.rightInputToolbarButton setTitle:nil forState:UIControlStateNormal];
     [self.rightInputToolbarButton setTitle:nil forState:UIControlStateHighlighted];
 
     self.isEncryptionEnabled = _isEncryptionEnabled;
     
-    [self updateUIWithTextMessage:nil animated:NO];
-}
+    [self updateUIWithAttributedTextMessage:nil animated:NO];
+    
+    self.textView.toolbarDelegate = self;
 
-- (void)setVoiceMessageToolbarView:(UIView *)voiceMessageToolbarView
-{
-    _voiceMessageToolbarView = voiceMessageToolbarView;
-    self.voiceMessageToolbarView.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:self.voiceMessageToolbarView];
-
-    [NSLayoutConstraint activateConstraints:@[[self.mainToolbarView.topAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.topAnchor],
-                                              [self.mainToolbarView.leftAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.leftAnchor],
-                                              [self.mainToolbarView.bottomAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.bottomAnchor],
-                                              [self.mainToolbarView.rightAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.rightAnchor]]];
+    inputAccessoryViewForKeyboard = [[UIView alloc] initWithFrame:CGRectZero];
+    self.textView.inputAccessoryView = inputAccessoryViewForKeyboard;
 }
 
 #pragma mark - Override MXKView
@@ -102,40 +88,45 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     self.backgroundColor = [UIColor clearColor];
     
     // Custom the growingTextView display
-    growingTextView.layer.cornerRadius = 0;
-    growingTextView.layer.borderWidth = 0;
-    growingTextView.backgroundColor = [UIColor clearColor];
+    self.textView.layer.cornerRadius = 0;
+    self.textView.layer.borderWidth = 0;
+    self.textView.backgroundColor = [UIColor clearColor];
+
+    self.textView.font = [UIFont systemFontOfSize:15];
+    self.textView.textColor = ThemeService.shared.theme.textPrimaryColor;
+    self.textView.tintColor = ThemeService.shared.theme.tintColor;
+    self.textView.placeholderColor = ThemeService.shared.theme.textTertiaryColor;
+    self.textView.showsVerticalScrollIndicator = NO;
+
+    // Trigger textView redraw using proper color/font.
+    NSAttributedString *newText = self.textView.attributedText;
+    self.textView.attributedText = nil;
+    self.textView.attributedText = newText;
     
-    growingTextView.font = [UIFont systemFontOfSize:15];
-    growingTextView.textColor = ThemeService.shared.theme.textPrimaryColor;
-    growingTextView.tintColor = ThemeService.shared.theme.tintColor;
-    growingTextView.placeholderColor = ThemeService.shared.theme.textTertiaryColor;
-    growingTextView.internalTextView.showsVerticalScrollIndicator = NO;
-    
-    growingTextView.internalTextView.keyboardAppearance = ThemeService.shared.theme.keyboardAppearance;
-    if (growingTextView.isFirstResponder)
+    self.textView.keyboardAppearance = ThemeService.shared.theme.keyboardAppearance;
+    if (self.textView.isFirstResponder)
     {
-        [growingTextView resignFirstResponder];
-        [growingTextView becomeFirstResponder];
+        [self.textView resignFirstResponder];
+        [self.textView becomeFirstResponder];
     }
 
     self.attachMediaButton.accessibilityLabel = [VectorL10n roomAccessibilityUpload];
     
-    UIImage *image = [UIImage imageNamed:@"input_text_background"];
+    UIImage *image = AssetImages.inputTextBackground.image;
     image = [image resizableImageWithCapInsets:UIEdgeInsetsMake(9, 15, 10, 16)];
     self.inputTextBackgroundView.image = image;
     self.inputTextBackgroundView.tintColor = ThemeService.shared.theme.roomInputTextBorder;
     
     if ([ThemeService.shared.themeId isEqualToString:@"light"])
     {
-        [self.attachMediaButton setImage:[UIImage imageNamed:@"upload_icon"] forState:UIControlStateNormal];
+        [self.attachMediaButton setImage:AssetImages.uploadIcon.image forState:UIControlStateNormal];
     }
     else if ([ThemeService.shared.themeId isEqualToString:@"dark"] || [ThemeService.shared.themeId isEqualToString:@"black"])
     {
-        [self.attachMediaButton setImage:[UIImage imageNamed:@"upload_icon_dark"] forState:UIControlStateNormal];
+        [self.attachMediaButton setImage:AssetImages.uploadIconDark.image forState:UIControlStateNormal];
     }
     else if (ThemeService.shared.theme.userInterfaceStyle == UIUserInterfaceStyleDark) {
-        [self.attachMediaButton setImage:[UIImage imageNamed:@"upload_icon_dark"] forState:UIControlStateNormal];
+        [self.attachMediaButton setImage:AssetImages.uploadIconDark.image forState:UIControlStateNormal];
     }
     
     self.inputContextImageView.tintColor = ThemeService.shared.theme.textSecondaryColor;
@@ -148,8 +139,52 @@ const CGFloat kComposerContainerTrailingPadding = 12;
 
 - (void)setTextMessage:(NSString *)textMessage
 {
-    [self updateUIWithTextMessage:textMessage animated:YES];
-    [super setTextMessage:textMessage];
+    [self setAttributedTextMessage:textMessage ? [[NSAttributedString alloc] initWithString:textMessage] : nil];
+}
+
+- (void)setAttributedTextMessage:(NSAttributedString *)attributedTextMessage
+{
+    if (attributedTextMessage)
+    {
+        NSMutableAttributedString *mutableTextMessage = [[NSMutableAttributedString alloc] initWithAttributedString:attributedTextMessage];
+        [mutableTextMessage addAttributes:@{ NSForegroundColorAttributeName: ThemeService.shared.theme.textPrimaryColor,
+                                             NSFontAttributeName: self.defaultFont }
+                                    range:NSMakeRange(0, mutableTextMessage.length)];
+        attributedTextMessage = mutableTextMessage;
+    }
+
+    self.textView.attributedText = attributedTextMessage;
+
+    if (@available(iOS 15.0, *)) {
+        // Fixes an iOS 16 issue where attachment are not drawn properly by
+        // forcing the layoutManager to redraw the glyphs at all NSAttachment positions.
+        [self.textView vc_invalidateTextAttachmentsDisplay];
+    }
+
+    [self updateUIWithAttributedTextMessage:attributedTextMessage animated:YES];
+    [self textViewDidChange:self.textView];
+}
+
+- (NSAttributedString *)attributedTextMessage
+{
+    return self.textView.attributedText;
+}
+
+- (NSString *)textMessage
+{
+    return self.textView.text;
+}
+
+- (UIFont *)defaultFont
+{
+    if (self.textView.font)
+    {
+        return self.textView.font;
+    }
+    else
+    {
+        return [UIFont systemFontOfSize:15.f];
+    }
 }
 
 - (void)setIsEncryptionEnabled:(BOOL)isEncryptionEnabled
@@ -178,40 +213,48 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     switch (_sendMode)
     {
         case RoomInputToolbarViewSendModeReply:
-            buttonImage = [UIImage imageNamed:@"send_icon"];
-            self.inputContextImageView.image = [UIImage imageNamed:@"input_reply_icon"];
+            buttonImage = AssetImages.sendIcon.image;
+            self.inputContextImageView.image = AssetImages.inputReplyIcon.image;
             self.inputContextLabel.text = [VectorL10n roomMessageReplyingTo:self.eventSenderDisplayName];
 
             self.inputContextViewHeightConstraint.constant = kContextBarHeight;
             updatedHeight += kContextBarHeight;
-            self->growingTextView.maxHeight -= kContextBarHeight;
+            self.textView.maxHeight -= kContextBarHeight;
             break;
         case RoomInputToolbarViewSendModeEdit:
-            buttonImage = [UIImage imageNamed:@"save_icon"];
-            self.inputContextImageView.image = [UIImage imageNamed:@"input_edit_icon"];
+            buttonImage = AssetImages.saveIcon.image;
+            self.inputContextImageView.image = AssetImages.inputEditIcon.image;
             self.inputContextLabel.text = [VectorL10n roomMessageEditing];
 
             self.inputContextViewHeightConstraint.constant = kContextBarHeight;
             updatedHeight += kContextBarHeight;
-            self->growingTextView.maxHeight -= kContextBarHeight;
+            self.textView.maxHeight -= kContextBarHeight;
+            break;
+        case RoomInputToolbarViewSendModeCreateDM:
+            buttonImage = AssetImages.sendIcon.image;
+            self.inputContextViewHeightConstraint.constant = 0;
             break;
         default:
-            buttonImage = [UIImage imageNamed:@"send_icon"];
+            buttonImage = AssetImages.sendIcon.image;
 
             if (previousMode != _sendMode)
             {
                 updatedHeight -= kContextBarHeight;
-                self->growingTextView.maxHeight += kContextBarHeight;
+                self.textView.maxHeight += kContextBarHeight;
             }
             self.inputContextViewHeightConstraint.constant = 0;
             break;
     }
     
+    // Hide the context items from VoiceOver when the context view is "hidden".
+    self.inputContextLabel.isAccessibilityElement = self.inputContextViewHeightConstraint.constant > 0;
+    self.inputContextButton.isAccessibilityElement = self.inputContextViewHeightConstraint.constant > 0;
+    
     [self.rightInputToolbarButton setImage:buttonImage forState:UIControlStateNormal];
     
     if (self.maxHeight && updatedHeight > self.maxHeight)
     {
-        growingTextView.maxHeight -= updatedHeight - self.maxHeight;
+        self.textView.maxHeight -= updatedHeight - self.maxHeight;
         updatedHeight = self.maxHeight;
     }
 
@@ -235,59 +278,15 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     }
 }
 
-- (void)updatePlaceholder
+- (void)setPlaceholder:(NSString *)inPlaceholder
 {
-    // Consider the default placeholder
-    
-    NSString *placeholder;
-    
-    // Check the device screen size before using large placeholder
-    BOOL shouldDisplayLargePlaceholder = [GBDeviceInfo deviceInfo].family == GBDeviceFamilyiPad || [GBDeviceInfo deviceInfo].displayInfo.display >= GBDeviceDisplay5p8Inch;
-    
-    if (!shouldDisplayLargePlaceholder)
-    {
-        switch (_sendMode)
-        {
-            case RoomInputToolbarViewSendModeReply:
-                placeholder = [VectorL10n roomMessageReplyToShortPlaceholder];
-                break;
+    [super setPlaceholder:inPlaceholder];
+    self.textView.placeholder = inPlaceholder;
+}
 
-            default:
-                placeholder = [VectorL10n roomMessageShortPlaceholder];
-                break;
-        }
-    }
-    else
-    {
-        if (_isEncryptionEnabled)
-        {
-            switch (_sendMode)
-            {
-                case RoomInputToolbarViewSendModeReply:
-                    placeholder = [VectorL10n encryptedRoomMessageReplyToPlaceholder];
-                    break;
-
-                default:
-                    placeholder = [VectorL10n encryptedRoomMessagePlaceholder];
-                    break;
-            }
-        }
-        else
-        {
-            switch (_sendMode)
-            {
-                case RoomInputToolbarViewSendModeReply:
-                    placeholder = [VectorL10n roomMessageReplyToPlaceholder];
-                    break;
-
-                default:
-                    placeholder = [VectorL10n roomMessagePlaceholder];
-                    break;
-            }
-        }
-    }
-    
-    self.placeholder = placeholder;
+- (void)pasteText:(NSString *)text
+{
+    self.textMessage = [self.textView.text stringByReplacingCharactersInRange:self.textView.selectedRange withString:text];
 }
 
 #pragma mark - Actions
@@ -300,17 +299,18 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     }
 }
 
-#pragma mark - HPGrowingTextView delegate
+#pragma mark - UITextViewDelegate
 
-- (BOOL)growingTextView:(HPGrowingTextView *)growingTextView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
+- (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
 {
-    NSString *newText = [growingTextView.text stringByReplacingCharactersInRange:range withString:text];
-    [self updateUIWithTextMessage:newText animated:YES];
-    
+    NSMutableAttributedString *newText = [[NSMutableAttributedString alloc] initWithAttributedString:textView.attributedText];
+    [newText replaceCharactersInRange:range withString:text];
+    [self updateUIWithAttributedTextMessage:newText animated:YES];
+
     return YES;
 }
 
-- (void)growingTextViewDidChange:(HPGrowingTextView *)hpGrowingTextView
+- (void)textViewDidChange:(UITextView *)textView
 {
     // Clean the carriage return added on return press
     if ([self.textMessage isEqualToString:@"\n"])
@@ -318,17 +318,24 @@ const CGFloat kComposerContainerTrailingPadding = 12;
         self.textMessage = nil;
     }
     
-    [super growingTextViewDidChange:hpGrowingTextView];
+    if ([self.delegate respondsToSelector:@selector(roomInputToolbarView:isTyping:)])
+    {
+        [self.delegate roomInputToolbarView:self isTyping:(self.textMessage.length > 0 ? YES : NO)];
+    }
+
+    [self.delegate roomInputToolbarViewDidChangeTextMessage:self];
 }
 
-- (void)growingTextView:(HPGrowingTextView *)hpGrowingTextView willChangeHeight:(float)height
+#pragma mark - RoomInputToolbarTextViewDelegate
+
+- (void)textView:(RoomInputToolbarTextView *)textView didChangeHeight:(CGFloat)height
 {
     // Update height of the main toolbar (message composer)
     CGFloat updatedHeight = height + (self.messageComposerContainerTopConstraint.constant + self.messageComposerContainerBottomConstraint.constant) + self.inputContextViewHeightConstraint.constant;
-    
+
     if (self.maxHeight && updatedHeight > self.maxHeight)
     {
-        hpGrowingTextView.maxHeight -= updatedHeight - self.maxHeight;
+        textView.maxHeight -= updatedHeight - self.maxHeight;
         updatedHeight = self.maxHeight;
     }
 
@@ -336,14 +343,19 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     {
         updatedHeight = self.mainToolbarMinHeightConstraint.constant;
     }
-    
+
     self.mainToolbarHeightConstraint.constant = updatedHeight;
-    
+
     // Update toolbar superview
     if ([self.delegate respondsToSelector:@selector(roomInputToolbarView:heightDidChanged:completion:)])
     {
         [self.delegate roomInputToolbarView:self heightDidChanged:updatedHeight completion:nil];
     }
+}
+
+- (void)textView:(RoomInputToolbarTextView *)textView didReceivePasteForMediaFromSender:(id)sender
+{
+    [self paste:sender];
 }
 
 #pragma mark - Override MXKRoomInputToolbarView
@@ -352,20 +364,29 @@ const CGFloat kComposerContainerTrailingPadding = 12;
 {
     if (button == self.attachMediaButton)
     {
-        self.actionMenuOpened = !self.isActionMenuOpened;
+        self.actionMenuOpened = !self.actionMenuOpened;
     }
 
     [super onTouchUpInside:button];
 }
 
+- (BOOL)isFirstResponder
+{
+    return [self.textView isFirstResponder];
+}
+
+- (BOOL)becomeFirstResponder
+{
+    return [self.textView becomeFirstResponder];
+}
+
+- (void)dismissKeyboard
+{
+    [self.textView resignFirstResponder];
+}
+
 - (void)destroy
 {
-    if (actionSheet)
-    {
-        [actionSheet dismissViewControllerAnimated:NO completion:nil];
-        actionSheet = nil;
-    }
-    
     [super destroy];
 }
 
@@ -377,17 +398,18 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     {
         _actionMenuOpened = actionMenuOpened;
         
-        if (self->growingTextView.internalTextView.selectedRange.length > 0)
+        if (self.textView.selectedRange.length > 0)
         {
-            NSRange range = self->growingTextView.internalTextView.selectedRange;
+            NSRange range = self.textView.selectedRange;
             range.location = range.location + range.length;
             range.length = 0;
-            self->growingTextView.internalTextView.selectedRange = range;
+            self.textView.selectedRange = range;
         }
 
         if (_actionMenuOpened) {
             self.actionsBar.hidden = NO;
             [self.actionsBar animateWithShowIn:_actionMenuOpened completion:nil];
+            [self.delegate roomInputToolbarViewDidOpenActionMenu:self];
         }
         else
         {
@@ -402,18 +424,19 @@ const CGFloat kComposerContainerTrailingPadding = 12;
         
         [UIView animateWithDuration:kActionMenuContentAlphaAnimationDuration delay:_actionMenuOpened ? 0 : .1 options:UIViewAnimationOptionCurveEaseIn animations:^{
             self->messageComposerContainer.alpha = actionMenuOpened ? 0 : 1;
-            self.rightInputToolbarButton.alpha = self->growingTextView.text.length == 0 || actionMenuOpened ? 0 : 1;
-            self.voiceMessageToolbarView.alpha = self->growingTextView.text.length > 0 || actionMenuOpened ? 0 : 1;
+            self.rightInputToolbarButton.alpha = self.textView.text.length == 0 || actionMenuOpened ? 0 : 1;
+            self.voiceMessageToolbarView.alpha = self.textView.text.length > 0 || actionMenuOpened ? 0 : 1;
         } completion:nil];
         
         [UIView animateWithDuration:kActionMenuComposerHeightAnimationDuration animations:^{
             if (actionMenuOpened)
             {
+                self.expandedMainToolbarHeight = self.mainToolbarHeightConstraint.constant;
                 self.mainToolbarHeightConstraint.constant = self.mainToolbarMinHeightConstraint.constant;
             }
             else
             {
-                [self->growingTextView refreshHeight];
+                self.mainToolbarHeightConstraint.constant = self.expandedMainToolbarHeight;
             }
             [self layoutIfNeeded];
             [self.delegate roomInputToolbarView:self heightDidChanged:self.mainToolbarHeightConstraint.constant completion:nil];
@@ -421,25 +444,53 @@ const CGFloat kComposerContainerTrailingPadding = 12;
     }
 }
 
-#pragma mark - Clipboard - Handle image/data paste from general pasteboard
-
-- (void)paste:(id)sender
-{
-    // TODO Custom here the validation screen for each available item
-    
-    [super paste:sender];
-}
-
 #pragma mark - Private
 
-- (void)updateUIWithTextMessage:(NSString *)textMessage animated:(BOOL)animated
+- (void)updateUIWithAttributedTextMessage:(NSAttributedString *)attributedTextMessage animated:(BOOL)animated
 {
     self.actionMenuOpened = NO;
         
     [UIView animateWithDuration:(animated ? 0.15f : 0.0f) animations:^{
-        self.rightInputToolbarButton.alpha = textMessage.length ? 1.0f : 0.0f;
-        self.voiceMessageToolbarView.alpha = textMessage.length ? 0.0f : 1.0;
+        self.rightInputToolbarButton.alpha = attributedTextMessage.length ? 1.0f : 0.0f;
+        self.rightInputToolbarButton.enabled = attributedTextMessage.length;
+        
+        self.voiceMessageToolbarView.alpha = attributedTextMessage.length ? 0.0f : 1.0;
     }];
 }
 
+#pragma mark - RoomInputToolbarViewProtocol
+
+- (CGFloat)toolbarHeight {
+    return self.mainToolbarHeightConstraint.constant;
+}
+
+- (void)setVoiceMessageToolbarView:(UIView *)voiceMessageToolbarView
+{
+    if (voiceMessageToolbarView) {
+        _voiceMessageToolbarView = voiceMessageToolbarView;
+        self.voiceMessageToolbarView.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:self.voiceMessageToolbarView];
+
+        [NSLayoutConstraint activateConstraints:@[[self.mainToolbarView.topAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.topAnchor],
+                                                  [self.mainToolbarView.leftAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.leftAnchor],
+                                                  [self.mainToolbarView.bottomAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.bottomAnchor],
+                                                  [self.mainToolbarView.rightAnchor constraintEqualToAnchor:self.voiceMessageToolbarView.rightAnchor]]];
+        
+        // The voice message toolbar is taller than the input toolbar so the record button is read
+        // out before the other subviews. Fix this by manually adding the elements in the right order.
+        self.accessibilityElements = @[self.attachMediaButton,
+                                       self.actionsBar,
+                                       self.inputContextLabel,
+                                       self.inputContextButton,
+                                       self.textView,
+                                       self.rightInputToolbarButton,
+                                       self.voiceMessageToolbarView];
+    }
+    else
+    {
+        [self.voiceMessageToolbarView removeFromSuperview];
+        _voiceMessageToolbarView = nil;
+        self.accessibilityElements = nil;
+    }
+}
 @end

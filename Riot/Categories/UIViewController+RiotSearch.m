@@ -1,18 +1,10 @@
 /*
- Copyright 2015 OpenMarket Ltd
- Copyright 2017 Vector Creations Ltd
+Copyright 2024 New Vector Ltd.
+Copyright 2017 Vector Creations Ltd
+Copyright 2015 OpenMarket Ltd
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE in the repository root for full details.
  */
 
 #import "UIViewController+RiotSearch.h"
@@ -20,7 +12,7 @@
 #import <objc/runtime.h>
 
 #import "ThemeService.h"
-#import "Riot-Swift.h"
+#import "GeneratedInterface-Swift.h"
 
 /**
  `UIViewControllerRiotSearchInternals` is the internal single point storage for the search feature.
@@ -37,10 +29,6 @@
 @property (nonatomic) UIView *backupTitleView;
 @property (nonatomic) UIBarButtonItem *backupLeftBarButtonItem;
 @property (nonatomic) UIBarButtonItem *backupRightBarButtonItem;
-
-// The Riot empty search background image (champagne bubbles)
-@property (nonatomic) UIImageView *backgroundImageView;
-@property (nonatomic) NSLayoutConstraint *backgroundImageViewBottomConstraint;
 
 @end
 
@@ -70,16 +58,6 @@
     return self.searchInternals.searchBarHidden;
 }
 
-- (UIImageView*)backgroundImageView
-{
-    return self.searchInternals.backgroundImageView;
-}
-
-- (NSLayoutConstraint *)backgroundImageViewBottomConstraint
-{
-    return self.searchInternals.backgroundImageViewBottomConstraint;
-}
-
 - (void)showSearch:(BOOL)animated
 {
     if (self.searchInternals.searchBarHidden)
@@ -103,8 +81,12 @@
         self.navigationItem.leftBarButtonItem = nil;
         
         // Add the search bar
-        self.navigationItem.titleView = self.searchBar;
-
+        UIView *searchBarContainer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, [UIScreen mainScreen].bounds.size.width, 44)];
+        searchBarContainer.backgroundColor = [UIColor clearColor];
+        searchBarContainer.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        
+        self.navigationItem.titleView = searchBarContainer;
+        [searchBarContainer addSubview:self.searchBar];
         self.extendedLayoutIncludesOpaqueBars = YES;
         
         // On iPad, there is no cancel button inside the UISearchBar
@@ -131,80 +113,6 @@
         self.navigationItem.rightBarButtonItem = self.searchInternals.backupRightBarButtonItem;
         
         self.searchInternals.searchBarHidden = YES;
-    }
-}
-
-- (void)addBackgroundImageViewToView:(UIView*)view
-{
-    UIImage *searchBgImage = [MXKTools paintImage:[UIImage imageNamed:@"search_bg"] withColor:ThemeService.shared.theme.matrixSearchBackgroundImageTintColor];
-    UIImageView *backgroundImageView = [[UIImageView alloc] initWithImage:searchBgImage];
-    backgroundImageView.translatesAutoresizingMaskIntoConstraints = NO;
-
-    [view addSubview:backgroundImageView];
-
-    // Keep it at left
-    NSLayoutConstraint *leftConstraint = [NSLayoutConstraint constraintWithItem:view
-                                                                      attribute:NSLayoutAttributeLeading
-                                                                      relatedBy:NSLayoutRelationEqual
-                                                                         toItem:backgroundImageView
-                                                                      attribute:NSLayoutAttributeLeading
-                                                                     multiplier:1.0
-                                                                     constant:0];
-    // Same width as parent
-    NSLayoutConstraint *widthConstraint = [NSLayoutConstraint constraintWithItem:view
-                                                                       attribute:NSLayoutAttributeWidth
-                                                                       relatedBy:NSLayoutRelationEqual
-                                                                          toItem:backgroundImageView
-                                                                       attribute:NSLayoutAttributeWidth
-                                                                      multiplier:1.0f
-                                                                        constant:0.0f];
-
-    // Keep the image aspect ratio
-    NSLayoutConstraint *aspectRatioConstraint = [NSLayoutConstraint
-                                                  constraintWithItem:backgroundImageView
-                                                  attribute:NSLayoutAttributeHeight
-                                                  relatedBy:NSLayoutRelationEqual
-                                                  toItem:backgroundImageView
-                                                  attribute:NSLayoutAttributeWidth
-                                                  multiplier:(backgroundImageView.frame.size.height / backgroundImageView.frame.size.width)
-                                                  constant:0];
-
-    // Set its position according to its bottom
-    NSLayoutConstraint *bottomConstraint = [NSLayoutConstraint constraintWithItem:view
-                                                                        attribute:NSLayoutAttributeBottom
-                                                                        relatedBy:NSLayoutRelationEqual
-                                                                           toItem:backgroundImageView
-                                                                        attribute:NSLayoutAttributeBottom
-                                                                       multiplier:1.0f
-                                                                         constant:216];
-
-    [NSLayoutConstraint activateConstraints:@[leftConstraint,
-                                              widthConstraint,
-                                              aspectRatioConstraint,
-                                              bottomConstraint
-                                              ]];
-
-    self.searchInternals.backgroundImageView = backgroundImageView;
-    self.searchInternals.backgroundImageViewBottomConstraint = bottomConstraint;
-
-    // It will be showed once the keyboard appears
-    backgroundImageView.hidden = YES;
-}
-
-- (void)setKeyboardHeightForBackgroundImage:(CGFloat)keyboardHeight
-{
-    // keyboardHeight = 0 means no keyboard
-    if (keyboardHeight > 0)
-    {
-        self.searchInternals.backgroundImageView.hidden = NO;
-
-        // 60 = 18 + 42 from the Riot design
-        self.searchInternals.backgroundImageViewBottomConstraint.constant = keyboardHeight - 60;
-    }
-    else
-    {
-        // Hide the search
-        self.searchInternals.backgroundImageView.hidden = YES;
     }
 }
 
@@ -265,8 +173,9 @@
         // Initialise internal data at the first call
         searchInternals = [[UIViewControllerRiotSearchInternals alloc] init];
 
-        UISearchBar *searchBar = [[UISearchBar alloc] init];
+        UISearchBar *searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, [UIScreen mainScreen].bounds.size.width, 44)];
         searchBar.showsCancelButton = YES;
+        searchBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         searchBar.delegate = (id<UISearchBarDelegate>)self;
         searchInternals.searchBar = searchBar;
 

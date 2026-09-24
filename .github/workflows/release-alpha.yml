@@ -1,12 +1,11 @@
 name: Build alpha release
 
 on:
-
   # Triggers the workflow on any pull request
   pull_request:
+    types: [ labeled, synchronize, opened, reopened ]
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+permissions: {}
 
 env:
   # Make the git branch for a PR available to our Fastfile
@@ -14,16 +13,28 @@ env:
 
 jobs:
   build:
+    # Only run for PRs that contain the trigger label. The action will fail for forks due to
+    # missing secrets, but there's no need to handle this as it won't run automatically.
+    if: contains(github.event.pull_request.labels.*.name, 'Trigger-PR-Build')
+
     name: Release
-    runs-on: macos-11
+    runs-on: macos-26
+    
+    concurrency:
+      # Only allow a single run of this workflow on each branch, automatically cancelling older runs.
+      group: alpha-${{ github.head_ref }}
+      cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+            submodules: 'true'
+            persist-credentials: false
 
       # Common cache
       # Note: GH actions do not support yaml anchor yet. We need to duplicate this for every job
       - name: Cache CocoaPods libraries
-        uses: actions/cache@v2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: Pods
           key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
@@ -31,30 +42,29 @@ jobs:
             ${{ runner.os }}-pods-
 
       - name: Cache Ruby gems
-        uses: actions/cache@v2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: vendor/bundle
           key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
           restore-keys: |
             ${{ runner.os }}-gems-
 
-      # Make sure we use the latest version of MatrixKit
-      - name: Reset MatrixKit pod
-        run: rm -rf Pods/MatrixKit
+      # Make sure we use the latest version of MatrixSDK
+      - name: Reset MatrixSDK pod
+        run: rm -rf Pods/MatrixSDK
 
       # Common setup
       # Note: GH actions do not support yaml anchor yet. We need to duplicate this for every job
+      - name: Brew bundle
+        run: brew bundle
       - name: Bundle install
         run: |
           bundle config path vendor/bundle
           bundle install --jobs 4 --retry 3
 
-      - name: Use right MatrixKit and MatrixSDK versions
-        run: bundle exec fastlane point_dependencies_to_related_branches
-
       # Import alpha release private signing certificate
       - name: Import signing certificate
-        uses: apple-actions/import-codesign-certs@v1
+        uses: apple-actions/import-codesign-certs@b610f78488812c1e56b20e6df63ec42d833f2d14 # v6.0.0
         with:
           p12-file-base64: ${{ secrets.ALPHA_CERTIFICATES_P12 }}
           p12-password: ${{ secrets.ALPHA_CERTIFICATES_P12_PASSWORD }}
@@ -65,15 +75,14 @@ jobs:
       - name: Build Ad-hoc release and send it to Diawi
         run: bundle exec fastlane alpha
         env:
-          # Automaticaly bypass 2FA upgrade if possible on Apple account.
-          SPACESHIP_SKIP_2FA_UPGRADE: true
-          APPLE_ID: ${{ secrets.FASTLANE_USER }}
-          FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
-          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+          APPSTORECONNECT_KEY_ID: ${{ secrets.APPSTORECONNECT_KEY_ID }}
+          APPSTORECONNECT_KEY_ISSUER_ID: ${{ secrets.APPSTORECONNECT_KEY_ISSUER_ID }}
+          APPSTORECONNECT_KEY_CONTENT: ${{ secrets.APPSTORECONNECT_KEY_CONTENT }}
           DIAWI_API_TOKEN: ${{ secrets.DIAWI_API_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
       - name: Add or update PR comment with Ad-hoc release informations
-        uses: NejcZdovc/comment-pr@v1
+        uses: NejcZdovc/comment-pr@a423635d183a8259308e80593c96fecf31539c26 # v2.1.0
         with:
           message: |
             :iphone: Scan the QR code below to install the build for this PR. 
